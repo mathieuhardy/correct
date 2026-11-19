@@ -29,6 +29,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext) -> Self {
         let config = Config::load();
         apply_theme(&cc.egui_ctx, &config.app.theme);
+        apply_colors(&cc.egui_ctx, &config.app);
         let font_error = apply_font(&cc.egui_ctx, &config.app);
 
         let (lt_client, lt_status) = LtClient::init(&config.languagetool);
@@ -75,6 +76,27 @@ impl App {
         if let Err(e) = self.config.save() {
             self.app_error = Some(e);
         }
+    }
+}
+
+pub fn apply_colors(ctx: &egui::Context, app_config: &crate::config::AppConfig) {
+    let bg = app_config.app_color_bg.as_deref().and_then(parse_hex_color);
+    let fg = app_config.app_color_fg.as_deref().and_then(parse_hex_color);
+
+    if bg.is_none() && fg.is_none() {
+        return;
+    }
+
+    for theme in [egui::Theme::Dark, egui::Theme::Light] {
+        ctx.style_mut_of(theme, |s| {
+            if let Some(c) = bg {
+                s.visuals.panel_fill = c;
+                s.visuals.window_fill = c;
+            }
+            if let Some(c) = fg {
+                s.visuals.override_text_color = Some(c);
+            }
+        });
     }
 }
 

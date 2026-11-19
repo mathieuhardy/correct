@@ -44,6 +44,10 @@ pub struct AppConfig {
     pub accent_color_bg: Option<String>,
     /// Couleur du texte des en-têtes en hex HTML, ex. "#ffffff" (optionnel).
     pub accent_color_fg: Option<String>,
+    /// Couleur de fond de l'application en hex HTML (optionnel).
+    pub app_color_bg: Option<String>,
+    /// Couleur du texte de l'application en hex HTML (optionnel).
+    pub app_color_fg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
