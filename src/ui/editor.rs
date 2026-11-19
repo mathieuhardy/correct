@@ -42,6 +42,7 @@ pub fn show(
                             .font(egui::TextStyle::Monospace)
                             .desired_width(content_w)
                             .frame(egui::Frame::new())
+                            .interactive(false)
                             .layouter(&mut layouter),
                     )
                 } else {
@@ -49,7 +50,8 @@ pub fn show(
                         egui::TextEdit::multiline(&mut buf.content)
                             .font(egui::TextStyle::Monospace)
                             .desired_width(content_w)
-                            .frame(egui::Frame::new()),
+                            .frame(egui::Frame::new())
+                            .interactive(false),
                     )
                 };
                 if res.changed() {
