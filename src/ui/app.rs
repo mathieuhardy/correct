@@ -13,7 +13,8 @@ pub struct App {
     pub lt_results: Vec<LtMatch>,
     pub lt_running: bool,
     pub selected_match: Option<usize>,
-    pub accent_color: Option<egui::Color32>,
+    pub accent_bg: Option<egui::Color32>,
+    pub accent_fg: Option<egui::Color32>,
     /// Message d'erreur affiché dans la barre de statut en bas.
     pub app_error: Option<String>,
 }
@@ -32,7 +33,8 @@ impl App {
 
         let (lt_client, lt_status) = LtClient::init(&config.languagetool);
 
-        let accent_color = config.app.accent_color.as_deref().and_then(parse_hex_color);
+        let accent_bg = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
+        let accent_fg = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
 
         // Charge le dictionnaire du dernier projet s'il existe encore sur le disque.
         let (current_project, dictionary) = match &config.app.last_project {
@@ -53,7 +55,8 @@ impl App {
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
-            accent_color,
+            accent_bg,
+            accent_fg,
             app_error: font_error,
         }
     }
@@ -127,18 +130,23 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     error
 }
 
-fn panel_header(ui: &mut egui::Ui, icon: &str, title: &str, accent: Option<egui::Color32>) {
-    let bg = accent.unwrap_or_else(|| {
+fn panel_header(
+    ui: &mut egui::Ui,
+    icon: &str,
+    title: &str,
+    accent_bg: Option<egui::Color32>,
+    accent_fg: Option<egui::Color32>,
+) {
+    let bg = accent_bg.unwrap_or_else(|| {
         if ui.visuals().dark_mode {
             egui::Color32::from_rgb(35, 38, 46)
         } else {
             egui::Color32::from_rgb(215, 220, 232)
         }
     });
-    let text_color = contrasting_text_color(bg);
+    let text_color = accent_fg.unwrap_or_else(|| contrasting_text_color(bg));
 
     let clip = ui.clip_rect();
-    let top = ui.cursor().min.y;
 
     // Réserver un slot AVANT le contenu : le fond sera inséré derrière le texte dans la paint list.
     let bg_slot = ui.painter().add(egui::Shape::Noop);
@@ -151,9 +159,9 @@ fn panel_header(ui: &mut egui::Ui, icon: &str, title: &str, accent: Option<egui:
             ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
         });
 
-    // Remplir le slot avec le rectangle pleine largeur (clip_rect.x dépasse les marges du panel).
+    // clip.min.y (et non cursor initial) pour couvrir la marge haute du panel.
     let full_rect = egui::Rect::from_min_max(
-        egui::pos2(clip.min.x, top),
+        egui::pos2(clip.min.x, clip.min.y),
         egui::pos2(clip.max.x, ui.cursor().min.y),
     );
     ui.painter().set(bg_slot, egui::Shape::rect_filled(full_rect, 0.0, bg));
@@ -206,18 +214,18 @@ impl eframe::App for App {
             });
         }
 
-        let accent = self.accent_color;
+        let (accent_bg, accent_fg) = (self.accent_bg, self.accent_fg);
 
         egui::Panel::left("file_tree")
             .default_size(180.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰙅", "Explorer", accent);
+                panel_header(ui, "󰙅", "Explorer", accent_bg, accent_fg);
             });
 
         egui::Panel::right("lt_panel")
             .default_size(260.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰓆", "LanguageTool", accent);
+                panel_header(ui, "󰓆", "LanguageTool", accent_bg, accent_fg);
             });
 
         egui::CentralPanel::default().show(ui, |_ui| {});

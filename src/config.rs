@@ -40,8 +40,10 @@ pub struct AppConfig {
     pub font_size: f32,
     /// Chemin vers un fichier .ttf/.otf à utiliser comme police principale (optionnel).
     pub font_family: Option<String>,
-    /// Couleur principale en hexadécimal HTML, ex. "#5277C3" (optionnel).
-    pub accent_color: Option<String>,
+    /// Couleur de fond des en-têtes en hex HTML, ex. "#5277C3" (optionnel).
+    pub accent_color_bg: Option<String>,
+    /// Couleur du texte des en-têtes en hex HTML, ex. "#ffffff" (optionnel).
+    pub accent_color_fg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -87,7 +87,8 @@ last_project = ""
 theme        = "dark"    # "dark" | "light"
 font_size    = 14.0
 font_family  = ""        # chemin vers un fichier .ttf/.otf ou nom de famille (optionnel)
-accent_color = ""        # couleur principale en hex HTML, ex. "#5277C3" (optionnel)
+accent_color_bg = ""     # fond des en-têtes de panneaux en hex HTML, ex. "#5277C3" (optionnel)
+accent_color_fg = ""     # texte des en-têtes de panneaux en hex HTML, ex. "#ffffff" (optionnel)
 ```
 
 Le champ `binary` est optionnel. Comportement au démarrage :
