@@ -79,25 +79,30 @@ pub fn apply_theme(ctx: &egui::Context, theme: &Theme) {
 }
 
 /// Applique la taille et la famille de police issues de la config.
-/// Retourne un message d'erreur si le fichier de police est introuvable.
+/// Retourne un message d'erreur si la police est introuvable.
 pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) -> Option<String> {
     const DEFAULT_SIZE: f32 = 14.0;
 
     let mut fonts = egui::FontDefinitions::default();
     let mut error: Option<String> = None;
 
-    if let Some(ref path) = app_config.font_family {
-        if !path.is_empty() {
-            match std::fs::read(path) {
-                Ok(bytes) => {
-                    fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(bytes).into());
+    if let Some(ref name_or_path) = app_config.font_family {
+        if !name_or_path.is_empty() {
+            let bytes = if std::path::Path::new(name_or_path).is_file() {
+                std::fs::read(name_or_path)
+                    .map_err(|e| format!("Police '{name_or_path}' illisible : {e}"))
+            } else {
+                font_bytes_by_name(name_or_path)
+                    .ok_or_else(|| format!("Police '{name_or_path}' introuvable sur le système"))
+            };
+            match bytes {
+                Ok(b) => {
+                    fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(b).into());
                     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                         fonts.families.entry(family).or_default().insert(0, "custom".to_owned());
                     }
                 }
-                Err(e) => {
-                    error = Some(format!("Police '{path}' introuvable : {e}"));
-                }
+                Err(e) => error = Some(e),
             }
         }
     }
@@ -116,6 +121,19 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     }
 
     error
+}
+
+fn font_bytes_by_name(name: &str) -> Option<Vec<u8>> {
+    let mut db = fontdb::Database::new();
+    db.load_system_fonts();
+    let query = fontdb::Query {
+        families: &[fontdb::Family::Name(name)],
+        weight: fontdb::Weight::NORMAL,
+        stretch: fontdb::Stretch::Normal,
+        style: fontdb::Style::Normal,
+    };
+    let id = db.query(&query)?;
+    db.with_face_data(id, |data, _| data.to_vec())
 }
 
 impl eframe::App for App {
