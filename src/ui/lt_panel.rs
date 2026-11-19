@@ -29,7 +29,7 @@ pub fn show(ui: &mut egui::Ui, status: &LtStatus, matches: &[LtMatch], running: 
         }
 
         // Bouton stop — actif uniquement si une analyse tourne (async, Phase 5).
-        ui.add_enabled(running, egui::Button::new("⏹"))
+        ui.add_enabled(running, egui::Button::new("■"))
             .on_hover_text("Arrêter");
     });
 

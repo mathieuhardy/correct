@@ -208,7 +208,9 @@ fn panel_header(
                 ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
                 if let Some(lbl) = trailing_btn {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(lbl).clicked() {
+                        if ui.add(egui::Button::new(
+                            egui::RichText::new(lbl).color(text_color)
+                        ).frame(false)).clicked() {
                             btn_clicked = true;
                         }
                     });
