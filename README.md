@@ -9,7 +9,7 @@ Interface minimaliste à trois panneaux, thème sombre par défaut.
 
 ```
 ┌──────────────┬──────────────────────────────┬──────────────────────┐
-│ Explorer     │ notes.md              ✎       │ LanguageTool  ● [☀]  │
+│ Explorer [⊕] │ notes.md              ✎       │ LanguageTool  ● [☀]  │
 ├──────────────┤                               ├──────────────────────┤
 │ ▼ project/   │ # Réunion du 15/11            │  [▶ Analyser] [■]    │
 │   ▶ docs/    │                               ├──────────────────────┤
@@ -25,7 +25,7 @@ Interface minimaliste à trois panneaux, thème sombre par défaut.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Panneau gauche** — explorateur de fichiers du projet ouvert
+- **Panneau gauche** — explorateur de fichiers du projet ouvert ; **[⊕]** ouvre un nouveau projet (aussi Ctrl+O)
 - **Panneau central** — un seul fichier ouvert à la fois, contenu avec erreurs soulignées
 - **Panneau droit** — résultats LanguageTool (liste collapsée), boutons d'analyse
 - **●** — statut de connexion LanguageTool (vert = connecté, rouge = inaccessible)
@@ -48,7 +48,8 @@ Cliquer sur un soulignement ou un élément du panneau droit ouvre un popup :
 
 ## Fonctionnalités
 
-- Ouvre le dernier projet au démarrage
+- **Ouvrir un projet** via le bouton [⊕] dans le panneau gauche ou **Ctrl+O** (sélecteur de dossier) ; ce projet devient le dernier ouvert et sera restauré au prochain démarrage
+- Ouvre automatiquement le dernier projet au démarrage
 - **Un seul fichier ouvert à la fois** dans le panneau central ; ouvrir un autre fichier ferme le précédent sans fuite mémoire (le watcher est libéré par drop)
 - Analyse orthographique et grammaticale via LanguageTool
 - Soulignement des erreurs dans le texte
@@ -167,6 +168,7 @@ src/
 ### Phase 3 — Squelette GUI
 - [ ] Fenêtre 3 panneaux (`egui::SidePanel` + `CentralPanel`)
 - [ ] Thème sombre par défaut + bascule clair/sombre
+- [ ] Bouton [⊕] + raccourci Ctrl+O → sélecteur de dossier (`rfd`) → ouvre le projet, persiste `last_project`
 - [ ] Arbre de fichiers (panneau gauche)
 - [ ] Affichage texte défilable (panneau central)
 - [ ] Boutons + liste placeholder (panneau droit)
