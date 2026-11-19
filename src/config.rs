@@ -38,6 +38,10 @@ pub struct AppConfig {
     pub app_color_bg: Option<String>,
     /// Couleur du texte de l'application en hex HTML (optionnel).
     pub app_color_fg: Option<String>,
+    /// Fond du fichier actif dans l'arbre (optionnel).
+    pub selection_color_bg: Option<String>,
+    /// Texte du fichier actif dans l'arbre (optionnel).
+    pub selection_color_fg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

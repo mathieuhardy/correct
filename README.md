@@ -88,8 +88,10 @@ font_size    = 14.0
 font_family  = ""        # chemin vers un fichier .ttf/.otf ou nom de famille (optionnel)
 accent_color_bg = ""     # fond des en-têtes de panneaux en hex HTML, ex. "#5277C3" (optionnel)
 accent_color_fg = ""     # texte des en-têtes de panneaux en hex HTML, ex. "#ffffff" (optionnel)
-app_color_bg    = ""     # fond de l'application en hex HTML (optionnel)
-app_color_fg    = ""     # texte de l'application en hex HTML (optionnel)
+app_color_bg       = ""  # fond de l'application en hex HTML (optionnel)
+app_color_fg       = ""  # texte de l'application en hex HTML (optionnel)
+selection_color_bg = ""  # fond du fichier actif dans l'arbre (optionnel)
+selection_color_fg = ""  # texte du fichier actif dans l'arbre (optionnel)
 ```
 
 Le champ `binary` est optionnel. Comportement au démarrage :

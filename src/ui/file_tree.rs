@@ -21,10 +21,16 @@ impl FileTree {
     }
 
     /// Affiche l'arbre et retourne le chemin du fichier cliqué, le cas échéant.
-    pub fn show(&mut self, ui: &mut egui::Ui, open_path: Option<&Path>) -> Option<PathBuf> {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        open_path: Option<&Path>,
+        selection_bg: Option<egui::Color32>,
+        selection_fg: Option<egui::Color32>,
+    ) -> Option<PathBuf> {
         let mut clicked = None;
         for node in &mut self.nodes {
-            if let Some(p) = show_node(ui, node, open_path) {
+            if let Some(p) = show_node(ui, node, open_path, selection_bg, selection_fg) {
                 clicked = Some(p);
             }
         }
@@ -52,14 +58,20 @@ fn build_children(dir: &Path) -> Vec<TreeNode> {
     nodes
 }
 
-fn show_node(ui: &mut egui::Ui, node: &mut TreeNode, open_path: Option<&Path>) -> Option<PathBuf> {
+fn show_node(
+    ui: &mut egui::Ui,
+    node: &mut TreeNode,
+    open_path: Option<&Path>,
+    selection_bg: Option<egui::Color32>,
+    selection_fg: Option<egui::Color32>,
+) -> Option<PathBuf> {
     if node.is_dir {
         let mut clicked = None;
         egui::CollapsingHeader::new(&node.name)
             .default_open(false)
             .show(ui, |ui| {
                 for child in &mut node.children {
-                    if let Some(p) = show_node(ui, child, open_path) {
+                    if let Some(p) = show_node(ui, child, open_path, selection_bg, selection_fg) {
                         clicked = Some(p);
                     }
                 }
@@ -67,10 +79,17 @@ fn show_node(ui: &mut egui::Ui, node: &mut TreeNode, open_path: Option<&Path>) -
         clicked
     } else {
         let selected = open_path.map(|p| p == node.path).unwrap_or(false);
-        if ui.selectable_label(selected, &node.name).clicked() {
-            Some(node.path.clone())
-        } else {
-            None
-        }
+        let clicked = ui.scope(|ui| {
+            if selected {
+                if let Some(bg) = selection_bg {
+                    ui.visuals_mut().selection.bg_fill = bg;
+                }
+                if let Some(fg) = selection_fg {
+                    ui.visuals_mut().override_text_color = Some(fg);
+                }
+            }
+            ui.selectable_label(selected, &node.name).clicked()
+        }).inner;
+        if clicked { Some(node.path.clone()) } else { None }
     }
 }

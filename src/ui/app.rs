@@ -18,6 +18,8 @@ pub struct App {
     pub selected_match: Option<usize>,
     pub accent_bg: Option<egui::Color32>,
     pub accent_fg: Option<egui::Color32>,
+    pub selection_bg: Option<egui::Color32>,
+    pub selection_fg: Option<egui::Color32>,
     pub app_error: Option<String>,
 }
 
@@ -38,8 +40,10 @@ impl App {
 
         let (lt_client, lt_status) = LtClient::init(&config.languagetool);
 
-        let accent_bg = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
-        let accent_fg = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
+        let accent_bg    = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
+        let accent_fg    = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
+        let selection_bg = config.app.selection_color_bg.as_deref().and_then(parse_hex_color);
+        let selection_fg = config.app.selection_color_fg.as_deref().and_then(parse_hex_color);
 
         let (current_project, dictionary, file_tree) = match &config.app.last_project {
             Some(path) if path.is_dir() => {
@@ -63,6 +67,8 @@ impl App {
             selected_match: None,
             accent_bg,
             accent_fg,
+            selection_bg,
+            selection_fg,
             app_error: font_error,
         }
     }
@@ -302,7 +308,7 @@ impl eframe::App for App {
                 if self.current_project.is_some() {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         let open_path = self.open_file.as_ref().map(|f| f.path.as_path());
-                        if let Some(path) = self.file_tree.show(ui, open_path) {
+                        if let Some(path) = self.file_tree.show(ui, open_path, self.selection_bg, self.selection_fg) {
                             self.load_file(path);
                         }
                     });
