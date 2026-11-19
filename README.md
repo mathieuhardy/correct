@@ -86,6 +86,8 @@ language = "auto"   # ou "fr", "en-US", etc.
 last_project = ""
 font_size    = 14.0
 font_family  = ""        # chemin vers un fichier .ttf/.otf ou nom de famille (optionnel)
+line_height  = 1.0       # multiplicateur d'interligne dans l'éditeur (1.5 = 150 %)
+editor_max_width = 720   # largeur max du texte en pixels pour le mode centré (optionnel)
 accent_color_bg = ""     # fond des en-têtes de panneaux en hex HTML, ex. "#5277C3" (optionnel)
 accent_color_fg = ""     # texte des en-têtes de panneaux en hex HTML, ex. "#ffffff" (optionnel)
 app_color_bg       = ""  # fond de l'application en hex HTML (optionnel)

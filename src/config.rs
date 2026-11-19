@@ -18,9 +18,8 @@ impl Default for LanguageToolConfig {
     }
 }
 
-fn default_font_size() -> f32 {
-    14.0
-}
+fn default_font_size() -> f32 { 14.0 }
+fn default_line_height() -> f32 { 1.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
@@ -30,6 +29,11 @@ pub struct AppConfig {
     pub font_size: f32,
     /// Chemin vers un fichier .ttf/.otf à utiliser comme police principale (optionnel).
     pub font_family: Option<String>,
+    /// Multiplicateur d'interligne dans l'éditeur (1.0 = défaut, 1.5 = 150 %).
+    #[serde(default = "default_line_height")]
+    pub line_height: f32,
+    /// Largeur max du texte en pixels pour le mode centré (optionnel).
+    pub editor_max_width: Option<f32>,
     /// Couleur de fond des en-têtes en hex HTML, ex. "#5277C3" (optionnel).
     pub accent_color_bg: Option<String>,
     /// Couleur du texte des en-têtes en hex HTML, ex. "#ffffff" (optionnel).
