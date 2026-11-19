@@ -20,14 +20,17 @@ Interface minimaliste à trois panneaux, thème sombre par défaut.
 │              │                               │                      │
 │              │                               │ ▸ "importent" →      │
 │              │                               │   important          │
-└──────────────┴───────────────────────────────┴──────────────────────┘
+├──────────────┴───────────────────────────────┴──────────────────────┤
+│ ● Erreur : impossible de joindre LanguageTool (http://localhost:8081)│
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Panneau gauche** — explorateur de fichiers du projet ouvert
-- **Panneau central** — contenu du fichier, erreurs soulignées
+- **Panneau central** — un seul fichier ouvert à la fois, contenu avec erreurs soulignées
 - **Panneau droit** — résultats LanguageTool (liste collapsée), boutons d'analyse
 - **●** — statut de connexion LanguageTool (vert = connecté, rouge = inaccessible)
 - **[☀/☾]** — bascule thème clair/sombre
+- **Barre de statut** (bas) — icône rouge + message descriptif en cas d'erreur
 
 Cliquer sur un soulignement ou un élément du panneau droit ouvre un popup :
 
@@ -46,14 +49,18 @@ Cliquer sur un soulignement ou un élément du panneau droit ouvre un popup :
 ## Fonctionnalités
 
 - Ouvre le dernier projet au démarrage
+- **Un seul fichier ouvert à la fois** dans le panneau central ; ouvrir un autre fichier ferme le précédent sans fuite mémoire (le watcher est libéré par drop)
 - Analyse orthographique et grammaticale via LanguageTool
 - Soulignement des erreurs dans le texte
-- Accepter une suggestion → applique le remplacement dans le buffer
+- Accepter une suggestion → applique le remplacement et écrit immédiatement sur disque
 - Ignorer → masque l'erreur pour la session en cours
 - Ajouter au dictionnaire → persiste dans `.correct/dictionary.toml`, retire immédiatement les occurrences
 - Dictionnaire local par projet (`.correct/dictionary.toml`)
+- **Watch filesystem** : à l'ouverture d'un fichier, un watcher est posé dessus ; toute modification externe recharge le contenu et relance automatiquement l'analyse (panel droit nettoyé avant)
+- **Écriture immédiate** sur disque à chaque modification effectuée dans l'éditeur
+- Watch retiré proprement à la fermeture ou au remplacement du fichier
 - Thème sombre par défaut, bascule vers le thème clair
-- Sauvegarde du fichier (Ctrl+S)
+- **Barre de statut en bas** : icône rouge + message descriptif pour toute erreur (LT inaccessible, fichier illisible, écriture impossible…)
 
 ---
 
@@ -115,6 +122,7 @@ src/
   config.rs          # lecture/écriture config.toml
   dictionary.rs      # chargement/sauvegarde dictionnaire par projet
   languagetool.rs    # client HTTP + spawn/kill du processus LT
+  watcher.rs         # watch filesystem sur le fichier ouvert (notify)
   ui/
     mod.rs
     app.rs           # AppState, boucle principale egui
@@ -122,6 +130,7 @@ src/
     editor.rs        # panneau central — texte + soulignements
     lt_panel.rs      # panneau droit — résultats + boutons
     popup.rs         # modal accepter/ignorer/dictionnaire
+    status_bar.rs    # barre de statut en bas (erreurs)
 ```
 
 ### Stack technique
@@ -129,9 +138,10 @@ src/
 | Composant | Choix |
 |---|---|
 | Langage | Rust 2024 |
-| GUI | [egui](https://github.com/emilk/egui) 0.31 / eframe 0.31 |
+| GUI | [egui](https://github.com/emilk/egui) 0.37 / eframe 0.37 |
 | Config & dictionnaire | TOML (`serde` + `toml`) |
 | HTTP | `reqwest` + `tokio` |
+| Watch filesystem | `notify` |
 | Env de dev | Nix flake (`flake.nix`) |
 
 ---
@@ -140,8 +150,8 @@ src/
 
 ### Phase 0 — Scaffolding
 - [x] `cargo init`
-- [ ] `flake.nix` avec devShell (Rust toolchain + dépendances GUI)
-- [ ] Skeletons des modules
+- [x] `flake.nix` avec devShell (Rust toolchain + dépendances GUI)
+- [x] Skeletons des modules
 
 ### Phase 1 — Config & dictionnaire
 - [ ] Lecture/écriture `config.toml` (créé avec valeurs par défaut si absent)
@@ -168,7 +178,9 @@ src/
 - [ ] Popup modal : accepter / ignorer / ajouter au dictionnaire
 
 ### Phase 5 — Polish & persistance
-- [ ] Ctrl+S sauvegarde le fichier
+- [ ] Écriture immédiate sur disque à chaque modification
+- [ ] Watch filesystem sur le fichier ouvert (`notify`) : reload + relance analyse automatique
+- [ ] Libération propre du watcher au switch/fermeture de fichier (drop)
+- [ ] Barre de statut en bas : icône rouge + message pour toute erreur applicative
 - [ ] Réouverture du dernier projet au démarrage
-- [ ] Gestion des erreurs (LT inaccessible, fichier illisible, binaire introuvable)
 - [ ] Tests unitaires (config, dictionnaire, parsing réponse LT)
