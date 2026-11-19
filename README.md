@@ -84,7 +84,9 @@ language = "auto"   # ou "fr", "en-US", etc.
 
 [app]
 last_project = ""
-theme        = "dark"   # "dark" | "light"
+theme        = "dark"    # "dark" | "light"
+font_size    = 14.0
+font_family  = ""        # chemin vers un fichier .ttf/.otf (optionnel)
 ```
 
 Le champ `binary` est optionnel. Comportement au démarrage :
@@ -158,6 +160,7 @@ src/
 - [x] Lecture/écriture `config.toml` (créé avec valeurs par défaut si absent)
 - [x] Chargement `<projet>/.correct/dictionary.toml` à l'ouverture du projet
 - [x] Persistance de `last_project` et `theme`
+- [x] `font_size` et `font_family` chargés au démarrage et appliqués à l'interface
 
 ### Phase 2 — Client LanguageTool
 - [x] Logique connect-first / spawn-on-failure

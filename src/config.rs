@@ -26,11 +26,20 @@ impl Default for LanguageToolConfig {
     }
 }
 
+fn default_font_size() -> f32 {
+    14.0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub last_project: Option<PathBuf>,
     #[serde(default)]
     pub theme: Theme,
+    /// Taille de la police en points (défaut : 14.0).
+    #[serde(default = "default_font_size")]
+    pub font_size: f32,
+    /// Chemin vers un fichier .ttf/.otf à utiliser comme police principale (optionnel).
+    pub font_family: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -27,6 +27,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext) -> Self {
         let config = Config::load();
         apply_theme(&cc.egui_ctx, &config.app.theme);
+        let font_error = apply_font(&cc.egui_ctx, &config.app);
 
         let (lt_client, lt_status) = LtClient::init(&config.languagetool);
 
@@ -49,7 +50,7 @@ impl App {
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
-            app_error: None,
+            app_error: font_error,
         }
     }
 
@@ -75,6 +76,46 @@ pub fn apply_theme(ctx: &egui::Context, theme: &Theme) {
         Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
         Theme::Light => ctx.set_visuals(egui::Visuals::light()),
     }
+}
+
+/// Applique la taille et la famille de police issues de la config.
+/// Retourne un message d'erreur si le fichier de police est introuvable.
+pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) -> Option<String> {
+    const DEFAULT_SIZE: f32 = 14.0;
+
+    let mut fonts = egui::FontDefinitions::default();
+    let mut error: Option<String> = None;
+
+    if let Some(ref path) = app_config.font_family {
+        if !path.is_empty() {
+            match std::fs::read(path) {
+                Ok(bytes) => {
+                    fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(bytes).into());
+                    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+                        fonts.families.entry(family).or_default().insert(0, "custom".to_owned());
+                    }
+                }
+                Err(e) => {
+                    error = Some(format!("Police '{path}' introuvable : {e}"));
+                }
+            }
+        }
+    }
+
+    ctx.set_fonts(fonts);
+
+    if (app_config.font_size - DEFAULT_SIZE).abs() > f32::EPSILON {
+        let scale = app_config.font_size / DEFAULT_SIZE;
+        for theme in [egui::Theme::Dark, egui::Theme::Light] {
+            ctx.style_mut_of(theme, |s| {
+                for style in s.text_styles.values_mut() {
+                    style.size *= scale;
+                }
+            });
+        }
+    }
+
+    error
 }
 
 impl eframe::App for App {
