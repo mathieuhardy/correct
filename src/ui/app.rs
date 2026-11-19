@@ -28,10 +28,7 @@ impl App {
         let config = Config::load();
         apply_theme(&cc.egui_ctx, &config.app.theme);
 
-        let lt_client = LtClient::new(
-            config.languagetool.url.clone(),
-            config.languagetool.language.clone(),
-        );
+        let (lt_client, lt_status) = LtClient::init(&config.languagetool);
 
         // Charge le dictionnaire du dernier projet s'il existe encore sur le disque.
         let (current_project, dictionary) = match &config.app.last_project {
@@ -46,7 +43,7 @@ impl App {
             config,
             dictionary,
             lt_client,
-            lt_status: LtStatus::Connecting,
+            lt_status,
             current_project,
             open_file: None,
             lt_results: Vec::new(),

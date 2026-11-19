@@ -160,10 +160,10 @@ src/
 - [x] Persistance de `last_project` et `theme`
 
 ### Phase 2 — Client LanguageTool
-- [ ] Logique connect-first / spawn-on-failure
-- [ ] Indicateur de statut (cercle vert/rouge)
-- [ ] `check(text, lang) -> Vec<LtMatch>`
-- [ ] Filtrage par dictionnaire local
+- [x] Logique connect-first / spawn-on-failure
+- [x] Indicateur de statut (cercle vert/rouge)
+- [x] `check(text, lang) -> Vec<LtMatch>`
+- [x] Filtrage par dictionnaire local
 
 ### Phase 3 — Squelette GUI
 - [ ] Fenêtre 3 panneaux (`egui::SidePanel` + `CentralPanel`)
