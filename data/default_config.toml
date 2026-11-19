@@ -1,0 +1,17 @@
+[languagetool]
+binary = "languagetool-http-server"
+url = "http://localhost:8081"
+language = "fr"
+
+[app]
+last_project = ""
+font_size = 14.0
+font_family = "CommitMono Nerd Font"
+line_height  = 1.5
+editor_max_width = 700
+accent_color_bg = "#ca9ee6"
+accent_color_fg = "#272727"
+app_color_bg = "#272727"
+app_color_fg = "#f8f8f8"
+selection_color_bg = "#cdd6f4"
+selection_color_fg = "#272727"

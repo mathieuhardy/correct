@@ -197,3 +197,12 @@ src/
 - [ ] Barre de statut en bas : icône rouge + message pour toute erreur applicative
 - [ ] Réouverture du dernier projet au démarrage
 - [ ] Tests unitaires (config, dictionnaire, parsing réponse LT)
+
+### Bugs trouvés
+- [ ] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
+
+### Commandes
+
+```shell
+docker run --rm -p 8010:8010 erikvl87/languagetool
+```
