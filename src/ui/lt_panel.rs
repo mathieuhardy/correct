@@ -1,1 +1,37 @@
-// Phase 3
+use crate::languagetool::{LtMatch, LtStatus};
+
+pub enum Action {
+    None,
+    Analyse,
+}
+
+pub fn show(ui: &mut egui::Ui, status: &LtStatus, matches: &[LtMatch], running: bool) -> Action {
+    let (dot_color, dot_tip) = match status {
+        LtStatus::Connected    => (egui::Color32::from_rgb(80, 200, 120), "Connecté"),
+        LtStatus::Connecting   => (egui::Color32::YELLOW,                 "Connexion…"),
+        LtStatus::Unreachable  => (egui::Color32::from_rgb(220, 80, 80),  "Inaccessible"),
+    };
+
+    ui.add_space(6.0);
+
+    let mut action = Action::None;
+    let enabled = matches!(status, LtStatus::Connected) && !running;
+
+    ui.horizontal(|ui| {
+        ui.colored_label(dot_color, "●").on_hover_text(dot_tip);
+        ui.separator();
+        if ui.add_enabled(enabled, egui::Button::new("▶ Analyser")).clicked() {
+            action = Action::Analyse;
+        }
+    });
+
+    ui.add_space(4.0);
+    ui.separator();
+
+    if !matches.is_empty() {
+        let n = matches.len();
+        ui.label(format!("⚠ {} problème{}", n, if n > 1 { "s" } else { "" }));
+    }
+
+    action
+}

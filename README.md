@@ -84,7 +84,6 @@ language = "auto"   # ou "fr", "en-US", etc.
 
 [app]
 last_project = ""
-theme        = "dark"    # "dark" | "light"
 font_size    = 14.0
 font_family  = ""        # chemin vers un fichier .ttf/.otf ou nom de famille (optionnel)
 accent_color_bg = ""     # fond des en-têtes de panneaux en hex HTML, ex. "#5277C3" (optionnel)
@@ -163,8 +162,9 @@ src/
 ### Phase 1 — Config & dictionnaire
 - [x] Lecture/écriture `config.toml` (créé avec valeurs par défaut si absent)
 - [x] Chargement `<projet>/.correct/dictionary.toml` à l'ouverture du projet
-- [x] Persistance de `last_project` et `theme`
+- [x] Persistance de `last_project`
 - [x] `font_size` et `font_family` chargés au démarrage et appliqués à l'interface
+- [x] `accent_color_bg/fg` et `app_color_bg/fg` pour le contrôle complet des couleurs
 
 ### Phase 2 — Client LanguageTool
 - [x] Logique connect-first / spawn-on-failure
@@ -173,12 +173,12 @@ src/
 - [x] Filtrage par dictionnaire local
 
 ### Phase 3 — Squelette GUI
-- [ ] Fenêtre 3 panneaux (`egui::SidePanel` + `CentralPanel`)
-- [ ] Thème sombre par défaut + bascule clair/sombre
-- [ ] Bouton [⊕] + raccourci Ctrl+O → sélecteur de dossier (`rfd`) → ouvre le projet, persiste `last_project`
-- [ ] Arbre de fichiers (panneau gauche)
-- [ ] Affichage texte défilable (panneau central)
-- [ ] Boutons + liste placeholder (panneau droit)
+- [x] Fenêtre 3 panneaux (`egui::SidePanel` + `CentralPanel`)
+- [x] Thème sombre par défaut (bascule supprimée — couleurs pilotées par config)
+- [x] Bouton [⊕] + raccourci Ctrl+O → sélecteur de dossier (`rfd`) → ouvre le projet, persiste `last_project`
+- [x] Arbre de fichiers (panneau gauche) avec expand/collapse
+- [x] Éditeur texte défilable (panneau central) — `TextEdit` monospace, édition directe
+- [x] Statut LanguageTool ● + bouton [▶ Analyser] (panneau droit)
 
 ### Phase 4 — Affichage des erreurs & interactions
 - [ ] Soulignements via `egui::Painter`

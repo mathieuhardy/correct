@@ -1,7 +1,9 @@
-use crate::config::{Config, Theme};
+use crate::config::Config;
 use crate::dictionary::Dictionary;
 use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
+
+use super::file_tree::FileTree;
 
 pub struct App {
     pub config: Config,
@@ -10,12 +12,12 @@ pub struct App {
     pub lt_status: LtStatus,
     pub current_project: Option<PathBuf>,
     pub open_file: Option<FileBuffer>,
+    pub file_tree: FileTree,
     pub lt_results: Vec<LtMatch>,
     pub lt_running: bool,
     pub selected_match: Option<usize>,
     pub accent_bg: Option<egui::Color32>,
     pub accent_fg: Option<egui::Color32>,
-    /// Message d'erreur affiché dans la barre de statut en bas.
     pub app_error: Option<String>,
 }
 
@@ -28,7 +30,9 @@ pub struct FileBuffer {
 impl App {
     pub fn new(cc: &eframe::CreationContext) -> Self {
         let config = Config::load();
-        apply_theme(&cc.egui_ctx, &config.app.theme);
+
+        // Thème sombre par défaut — l'utilisateur contrôle les couleurs via la config.
+        cc.egui_ctx.set_visuals(egui::Visuals::dark());
         apply_colors(&cc.egui_ctx, &config.app);
         let font_error = apply_font(&cc.egui_ctx, &config.app);
 
@@ -37,13 +41,13 @@ impl App {
         let accent_bg = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
         let accent_fg = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
 
-        // Charge le dictionnaire du dernier projet s'il existe encore sur le disque.
-        let (current_project, dictionary) = match &config.app.last_project {
+        let (current_project, dictionary, file_tree) = match &config.app.last_project {
             Some(path) if path.is_dir() => {
                 let dict = Dictionary::load(path);
-                (Some(path.clone()), dict)
+                let tree = FileTree::load(path);
+                (Some(path.clone()), dict, tree)
             }
-            _ => (None, Dictionary::default()),
+            _ => (None, Dictionary::default(), FileTree::empty()),
         };
 
         Self {
@@ -53,6 +57,7 @@ impl App {
             lt_status,
             current_project,
             open_file: None,
+            file_tree,
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
@@ -62,20 +67,48 @@ impl App {
         }
     }
 
-    /// Ouvre un projet : charge son dictionnaire et persiste `last_project`.
     pub fn open_project(&mut self, path: PathBuf) {
-        // Fermer le fichier ouvert (drop du watcher futur inclus)
         self.open_file = None;
         self.lt_results.clear();
         self.selected_match = None;
 
         self.dictionary = Dictionary::load(&path);
+        self.file_tree = FileTree::load(&path);
         self.current_project = Some(path.clone());
         self.config.app.last_project = Some(path);
 
         if let Err(e) = self.config.save() {
             self.app_error = Some(e);
         }
+    }
+
+    pub fn load_file(&mut self, path: PathBuf) {
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                self.open_file = Some(FileBuffer { path, content, modified: false });
+                self.lt_results.clear();
+                self.selected_match = None;
+                self.app_error = None;
+            }
+            Err(e) => {
+                self.app_error = Some(format!("Impossible de lire '{}' : {e}", path.display()));
+            }
+        }
+    }
+
+    fn run_analysis(&mut self) {
+        let Some(ref buf) = self.open_file else { return };
+        self.lt_running = true;
+        match self.lt_client.check(&buf.content, &self.dictionary) {
+            Ok(matches) => {
+                self.lt_results = matches;
+                self.app_error = None;
+            }
+            Err(e) => {
+                self.app_error = Some(e);
+            }
+        }
+        self.lt_running = false;
     }
 }
 
@@ -100,15 +133,6 @@ pub fn apply_colors(ctx: &egui::Context, app_config: &crate::config::AppConfig) 
     }
 }
 
-pub fn apply_theme(ctx: &egui::Context, theme: &Theme) {
-    match theme {
-        Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
-        Theme::Light => ctx.set_visuals(egui::Visuals::light()),
-    }
-}
-
-/// Applique la taille et la famille de police issues de la config.
-/// Retourne un message d'erreur si la police est introuvable.
 pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) -> Option<String> {
     const DEFAULT_SIZE: f32 = 14.0;
 
@@ -152,13 +176,16 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     error
 }
 
+/// En-tête de panneau pleine largeur avec fond coloré.
+/// `trailing_btn` : label du bouton affiché à droite ; retourne true si cliqué.
 fn panel_header(
     ui: &mut egui::Ui,
     icon: &str,
     title: &str,
     accent_bg: Option<egui::Color32>,
     accent_fg: Option<egui::Color32>,
-) {
+    trailing_btn: Option<&str>,
+) -> bool {
     let bg = accent_bg.unwrap_or_else(|| {
         if ui.visuals().dark_mode {
             egui::Color32::from_rgb(35, 38, 46)
@@ -169,19 +196,26 @@ fn panel_header(
     let text_color = accent_fg.unwrap_or_else(|| contrasting_text_color(bg));
 
     let clip = ui.clip_rect();
-
-    // Réserver un slot AVANT le contenu : le fond sera inséré derrière le texte dans la paint list.
     let bg_slot = ui.painter().add(egui::Shape::Noop);
 
-    // Frame transparent pour le layout (avance le curseur, marges, texte).
+    let mut btn_clicked = false;
+
     egui::Frame::new()
         .inner_margin(egui::Margin { left: 10, right: 10, top: 7, bottom: 7 })
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
+                if let Some(lbl) = trailing_btn {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(lbl).clicked() {
+                            btn_clicked = true;
+                        }
+                    });
+                }
+            });
         });
 
-    // clip.min.y (et non cursor initial) pour couvrir la marge haute du panel.
     let full_rect = egui::Rect::from_min_max(
         egui::pos2(clip.min.x, clip.min.y),
         egui::pos2(clip.max.x, ui.cursor().min.y),
@@ -189,6 +223,7 @@ fn panel_header(
     ui.painter().set(bg_slot, egui::Shape::rect_filled(full_rect, 0.0, bg));
 
     ui.add_space(2.0);
+    btn_clicked
 }
 
 fn contrasting_text_color(bg: egui::Color32) -> egui::Color32 {
@@ -227,29 +262,70 @@ fn font_bytes_by_name(name: &str) -> Option<Vec<u8>> {
     db.with_face_data(id, |data, _| data.to_vec())
 }
 
+fn open_folder_dialog() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Ouvrir un projet")
+        .pick_folder()
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Barre de statut en bas (rendue avant les panneaux pour qu'elle ne soit pas couverte)
+        // Ctrl+O
+        if ui.input(|i| i.key_pressed(egui::Key::O) && i.modifiers.ctrl) {
+            if let Some(path) = open_folder_dialog() {
+                self.open_project(path);
+            }
+        }
+
+        // Barre de statut
         if let Some(ref err) = self.app_error.clone() {
             egui::Panel::bottom("status_bar").show(ui, |ui| {
-                ui.colored_label(egui::Color32::RED, format!("⬤ {err}"));
+                ui.colored_label(egui::Color32::RED, format!("⬤  {err}"));
             });
         }
 
-        let (accent_bg, accent_fg) = (self.accent_bg, self.accent_fg);
+        let (abg, afg) = (self.accent_bg, self.accent_fg);
 
+        // Panneau gauche — explorateur
         egui::Panel::left("file_tree")
-            .default_size(180.0)
+            .default_size(200.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰙅", "Explorer", accent_bg, accent_fg);
+                let open_clicked = panel_header(ui, "󰙅", "Explorer", abg, afg, Some("⊕"));
+                if open_clicked {
+                    if let Some(path) = open_folder_dialog() {
+                        self.open_project(path);
+                    }
+                }
+
+                if self.current_project.is_some() {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        let open_path = self.open_file.as_ref().map(|f| f.path.as_path());
+                        if let Some(path) = self.file_tree.show(ui, open_path) {
+                            self.load_file(path);
+                        }
+                    });
+                }
             });
 
+        // Panneau droit — LanguageTool
         egui::Panel::right("lt_panel")
             .default_size(260.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰓆", "LanguageTool", accent_bg, accent_fg);
+                panel_header(ui, "󰓆", "LanguageTool", abg, afg, None);
+                let action = super::lt_panel::show(
+                    ui,
+                    &self.lt_status,
+                    &self.lt_results,
+                    self.lt_running,
+                );
+                if matches!(action, super::lt_panel::Action::Analyse) {
+                    self.run_analysis();
+                }
             });
 
-        egui::CentralPanel::default().show(ui, |_ui| {});
+        // Panneau central — éditeur
+        egui::CentralPanel::default().show(ui, |ui| {
+            super::editor::show(ui, self.open_file.as_mut());
+        });
     }
 }

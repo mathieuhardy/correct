@@ -1,14 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum Theme {
-    #[default]
-    Dark,
-    Light,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LanguageToolConfig {
     pub binary: Option<PathBuf>,
@@ -33,8 +25,6 @@ fn default_font_size() -> f32 {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub last_project: Option<PathBuf>,
-    #[serde(default)]
-    pub theme: Theme,
     /// Taille de la police en points (défaut : 14.0).
     #[serde(default = "default_font_size")]
     pub font_size: f32,
