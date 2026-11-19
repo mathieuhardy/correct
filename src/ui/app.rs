@@ -13,6 +13,7 @@ pub struct App {
     pub lt_results: Vec<LtMatch>,
     pub lt_running: bool,
     pub selected_match: Option<usize>,
+    pub accent_color: Option<egui::Color32>,
     /// Message d'erreur affiché dans la barre de statut en bas.
     pub app_error: Option<String>,
 }
@@ -30,6 +31,8 @@ impl App {
         let font_error = apply_font(&cc.egui_ctx, &config.app);
 
         let (lt_client, lt_status) = LtClient::init(&config.languagetool);
+
+        let accent_color = config.app.accent_color.as_deref().and_then(parse_hex_color);
 
         // Charge le dictionnaire du dernier projet s'il existe encore sur le disque.
         let (current_project, dictionary) = match &config.app.last_project {
@@ -50,6 +53,7 @@ impl App {
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
+            accent_color,
             app_error: font_error,
         }
     }
@@ -123,20 +127,61 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     error
 }
 
-fn panel_header(ui: &mut egui::Ui, icon: &str, title: &str) {
-    let bg = if ui.visuals().dark_mode {
-        egui::Color32::from_rgb(35, 38, 46)
-    } else {
-        egui::Color32::from_rgb(215, 220, 232)
-    };
+fn panel_header(ui: &mut egui::Ui, icon: &str, title: &str, accent: Option<egui::Color32>) {
+    let bg = accent.unwrap_or_else(|| {
+        if ui.visuals().dark_mode {
+            egui::Color32::from_rgb(35, 38, 46)
+        } else {
+            egui::Color32::from_rgb(215, 220, 232)
+        }
+    });
+    let text_color = contrasting_text_color(bg);
+
+    let clip = ui.clip_rect();
+    let top = ui.cursor().min.y;
+
+    // Réserver un slot AVANT le contenu : le fond sera inséré derrière le texte dans la paint list.
+    let bg_slot = ui.painter().add(egui::Shape::Noop);
+
+    // Frame transparent pour le layout (avance le curseur, marges, texte).
     egui::Frame::new()
-        .fill(bg)
         .inner_margin(egui::Margin { left: 10, right: 10, top: 7, bottom: 7 })
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(egui::RichText::new(format!("{icon}  {title}")).strong());
+            ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
         });
+
+    // Remplir le slot avec le rectangle pleine largeur (clip_rect.x dépasse les marges du panel).
+    let full_rect = egui::Rect::from_min_max(
+        egui::pos2(clip.min.x, top),
+        egui::pos2(clip.max.x, ui.cursor().min.y),
+    );
+    ui.painter().set(bg_slot, egui::Shape::rect_filled(full_rect, 0.0, bg));
+
     ui.add_space(2.0);
+}
+
+fn contrasting_text_color(bg: egui::Color32) -> egui::Color32 {
+    let r = bg.r() as f32 / 255.0;
+    let g = bg.g() as f32 / 255.0;
+    let b = bg.b() as f32 / 255.0;
+    if 0.299 * r + 0.587 * g + 0.114 * b > 0.5 {
+        egui::Color32::from_gray(20)
+    } else {
+        egui::Color32::WHITE
+    }
+}
+
+fn parse_hex_color(hex: &str) -> Option<egui::Color32> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() == 6 {
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+        Some(egui::Color32::from_rgb(r, g, b))
+    } else {
+        None
+    }
 }
 
 fn font_bytes_by_name(name: &str) -> Option<Vec<u8>> {
@@ -161,16 +206,18 @@ impl eframe::App for App {
             });
         }
 
+        let accent = self.accent_color;
+
         egui::Panel::left("file_tree")
             .default_size(180.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰙅", "Explorer");
+                panel_header(ui, "󰙅", "Explorer", accent);
             });
 
         egui::Panel::right("lt_panel")
             .default_size(260.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰓆", "LanguageTool");
+                panel_header(ui, "󰓆", "LanguageTool", accent);
             });
 
         egui::CentralPanel::default().show(ui, |_ui| {});
