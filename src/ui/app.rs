@@ -123,6 +123,22 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     error
 }
 
+fn panel_header(ui: &mut egui::Ui, icon: &str, title: &str) {
+    let bg = if ui.visuals().dark_mode {
+        egui::Color32::from_rgb(35, 38, 46)
+    } else {
+        egui::Color32::from_rgb(215, 220, 232)
+    };
+    egui::Frame::new()
+        .fill(bg)
+        .inner_margin(egui::Margin { left: 10, right: 10, top: 7, bottom: 7 })
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.label(egui::RichText::new(format!("{icon}  {title}")).strong());
+        });
+    ui.add_space(2.0);
+}
+
 fn font_bytes_by_name(name: &str) -> Option<Vec<u8>> {
     let mut db = fontdb::Database::new();
     db.load_system_fonts();
@@ -148,17 +164,15 @@ impl eframe::App for App {
         egui::Panel::left("file_tree")
             .default_size(180.0)
             .show(ui, |ui| {
-                ui.heading("Explorer");
+                panel_header(ui, "󰙅", "Explorer");
             });
 
         egui::Panel::right("lt_panel")
             .default_size(260.0)
             .show(ui, |ui| {
-                ui.heading("LanguageTool");
+                panel_header(ui, "󰓆", "LanguageTool");
             });
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.label("Ouvrir un fichier…");
-        });
+        egui::CentralPanel::default().show(ui, |_ui| {});
     }
 }
