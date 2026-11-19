@@ -290,7 +290,7 @@ impl eframe::App for App {
         egui::Panel::left("file_tree")
             .default_size(200.0)
             .show(ui, |ui| {
-                let open_clicked = panel_header(ui, "󰙅", "Explorer", abg, afg, Some("⊕"));
+                let open_clicked = panel_header(ui, "󰙅", "Explorer", abg, afg, Some("󰉗"));
                 if open_clicked {
                     if let Some(path) = open_folder_dialog() {
                         self.open_project(path);
