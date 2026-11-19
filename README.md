@@ -155,9 +155,9 @@ src/
 - [x] Skeletons des modules
 
 ### Phase 1 — Config & dictionnaire
-- [ ] Lecture/écriture `config.toml` (créé avec valeurs par défaut si absent)
-- [ ] Chargement `<projet>/.correct/dictionary.toml` à l'ouverture du projet
-- [ ] Persistance de `last_project` et `theme`
+- [x] Lecture/écriture `config.toml` (créé avec valeurs par défaut si absent)
+- [x] Chargement `<projet>/.correct/dictionary.toml` à l'ouverture du projet
+- [x] Persistance de `last_project` et `theme`
 
 ### Phase 2 — Client LanguageTool
 - [ ] Logique connect-first / spawn-on-failure

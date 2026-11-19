@@ -40,3 +40,37 @@ pub struct Config {
     #[serde(default)]
     pub app: AppConfig,
 }
+
+impl Config {
+    pub fn load() -> Self {
+        let path = Self::path();
+        match std::fs::read_to_string(&path) {
+            Ok(content) => toml::from_str(&content).unwrap_or_default(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let config = Config::default();
+                let _ = config.save();
+                config
+            }
+            Err(_) => Config::default(),
+        }
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        let path = Self::path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Impossible de créer le dossier de config : {e}"))?;
+        }
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| format!("Erreur de sérialisation config : {e}"))?;
+        std::fs::write(&path, content)
+            .map_err(|e| format!("Impossible d'écrire la config ({}) : {e}", path.display()))
+    }
+
+    pub fn path() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("correct")
+            .join("config.toml")
+    }
+}
