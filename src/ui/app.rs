@@ -4,12 +4,14 @@ use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
 
 use super::file_tree::FileTree;
-use crate::watcher::DictWatcher;
+use crate::watcher::{DictWatcher, FileWatcher};
 
 pub struct App {
     pub config: Config,
     pub dictionary: Dictionary,
     pub dict_watcher: Option<DictWatcher>,
+    /// Watch du fichier ouvert ; remplacé (et l'ancien libéré par drop) à chaque ouverture.
+    pub file_watcher: Option<FileWatcher>,
     ctx: egui::Context,
     pub lt_client: LtClient,
     pub lt_status: LtStatus,
@@ -69,6 +71,7 @@ impl App {
             config,
             dictionary: Dictionary::default(),
             dict_watcher: None,
+            file_watcher: None,
             ctx: cc.egui_ctx.clone(),
             lt_client,
             lt_status,
@@ -139,6 +142,7 @@ impl App {
 
     pub fn open_project(&mut self, path: PathBuf) {
         self.open_file = None;
+        self.file_watcher = None;
         self.lt_results.clear();
         self.selected_match = None;
         self.popup_open = false;
@@ -154,15 +158,44 @@ impl App {
     pub fn load_file(&mut self, path: PathBuf) {
         match std::fs::read_to_string(&path) {
             Ok(content) => {
-                self.open_file = Some(FileBuffer { path, content, modified: false });
                 self.lt_results.clear();
                 self.selected_match = None;
                 self.popup_open = false;
                 self.app_error = None;
+                self.file_watcher = match FileWatcher::new(&path, self.ctx.clone()) {
+                    Ok(w) => Some(w),
+                    Err(e) => {
+                        self.app_error = Some(e);
+                        None
+                    }
+                };
+                self.open_file = Some(FileBuffer { path, content, modified: false });
             }
             Err(e) => {
                 self.app_error = Some(format!("Impossible de lire '{}' : {e}", path.display()));
             }
+        }
+    }
+
+    /// Fichier ouvert modifié sur disque : recharge, vide le panneau et relance l'analyse.
+    /// Nos propres écritures (suggestion acceptée) laissent un contenu identique : ignorées.
+    fn reload_open_file(&mut self) {
+        let Some(buf) = self.open_file.as_mut() else { return };
+        let content = match std::fs::read_to_string(&buf.path) {
+            Ok(c) => c,
+            Err(e) => {
+                self.app_error = Some(format!("Impossible de relire '{}' : {e}", buf.path.display()));
+                return;
+            }
+        };
+        if content == buf.content {
+            return;
+        }
+        buf.content = content;
+        self.lt_results.clear();
+        self.close_popup();
+        if self.lt_status == LtStatus::Connected {
+            self.run_analysis();
         }
     }
 
@@ -433,6 +466,11 @@ impl eframe::App for App {
             if let Some(path) = open_folder_dialog() {
                 self.open_project(path);
             }
+        }
+
+        // Fichier ouvert modifié sur disque
+        if self.file_watcher.as_mut().is_some_and(|w| w.poll()) {
+            self.reload_open_file();
         }
 
         // Dictionnaire modifié sur disque (hors application ou par nous-mêmes)
