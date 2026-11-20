@@ -1,8 +1,10 @@
+use crate::languagetool::LtMatch;
 use crate::ui::app::FileBuffer;
 
 pub fn show(
     ui: &mut egui::Ui,
     file: Option<&mut FileBuffer>,
+    matches: &[LtMatch],
     line_height: f32,
     max_width: Option<f32>,
 ) {
@@ -37,24 +39,23 @@ pub fn show(
                         });
                         ui.ctx().fonts_mut(|f| f.layout_job(job))
                     };
-                    ui.add(
-                        egui::TextEdit::multiline(&mut buf.content)
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(content_w)
-                            .frame(egui::Frame::new())
-                            .interactive(false)
-                            .layouter(&mut layouter),
-                    )
+                    egui::TextEdit::multiline(&mut buf.content)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(content_w)
+                        .frame(egui::Frame::new())
+                        .interactive(false)
+                        .layouter(&mut layouter)
+                        .show(ui)
                 } else {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut buf.content)
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(content_w)
-                            .frame(egui::Frame::new())
-                            .interactive(false),
-                    )
+                    egui::TextEdit::multiline(&mut buf.content)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(content_w)
+                        .frame(egui::Frame::new())
+                        .interactive(false)
+                        .show(ui)
                 };
-                if res.changed() {
+                paint_underlines(ui.painter(), &res.galley, res.galley_pos, matches);
+                if res.response.changed() {
                     buf.modified = true;
                 }
             };
@@ -68,4 +69,38 @@ pub fn show(
                 add_editor(ui);
             }
         });
+}
+
+/// Souligne en rouge les caractères couverts par chaque erreur non ignorée.
+/// Les offsets LT sont en caractères ; un segment est tracé par ligne visuelle
+/// pour gérer les erreurs coupées par le retour à la ligne.
+fn paint_underlines(
+    painter: &egui::Painter,
+    galley: &egui::Galley,
+    origin: egui::Pos2,
+    matches: &[LtMatch],
+) {
+    let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(220, 80, 80));
+
+    for m in matches.iter().filter(|m| !m.ignored && m.length > 0) {
+        let (start, end) = (m.offset, m.offset + m.length);
+        let mut row_start = 0usize;
+
+        for row in &galley.rows {
+            let row_len = row.glyphs.len();
+            if row_start >= end {
+                break;
+            }
+            let (a, b) = (start.max(row_start), end.min(row_start + row_len));
+            if a < b {
+                let first = &row.glyphs[a - row_start];
+                let last  = &row.glyphs[b - 1 - row_start];
+                let y  = origin.y + row.pos.y + first.pos.y + 4.0;
+                let x0 = origin.x + row.pos.x + first.pos.x;
+                let x1 = origin.x + row.pos.x + last.pos.x + last.advance_width;
+                painter.line_segment([egui::pos2(x0, y), egui::pos2(x1, y)], stroke);
+            }
+            row_start += row.char_count_including_newline().0;
+        }
+    }
 }

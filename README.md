@@ -185,7 +185,7 @@ src/
 - [x] Statut LanguageTool ● + bouton [▶ Analyser] (panneau droit)
 
 ### Phase 4 — Affichage des erreurs & interactions
-- [ ] Soulignements via `egui::Painter`
+- [x] Soulignements via `egui::Painter`
 - [ ] Détection de clic sur les spans d'erreur
 - [ ] Items collapsés dans le panneau droit, clic pour développer
 - [ ] Popup modal : accepter / ignorer / ajouter au dictionnaire

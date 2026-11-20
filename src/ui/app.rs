@@ -333,7 +333,7 @@ impl eframe::App for App {
 
         // Panneau central — éditeur
         egui::CentralPanel::default().show(ui, |ui| {
-            super::editor::show(ui, self.open_file.as_mut(), self.config.app.line_height, self.config.app.editor_max_width);
+            super::editor::show(ui, self.open_file.as_mut(), &self.lt_results, self.config.app.line_height, self.config.app.editor_max_width);
         });
     }
 }
