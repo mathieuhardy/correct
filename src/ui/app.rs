@@ -16,6 +16,10 @@ pub struct App {
     pub lt_results: Vec<LtMatch>,
     pub lt_running: bool,
     pub selected_match: Option<usize>,
+    pub popup_open: bool,
+    pub popup_opened_at: f64,
+    pub popup_armed: bool,
+    pub popup_colors: super::popup::PopupColors,
     pub accent_bg: Option<egui::Color32>,
     pub accent_fg: Option<egui::Color32>,
     pub selection_bg: Option<egui::Color32>,
@@ -45,6 +49,17 @@ impl App {
         let selection_bg = config.app.selection_color_bg.as_deref().and_then(parse_hex_color);
         let selection_fg = config.app.selection_color_fg.as_deref().and_then(parse_hex_color);
 
+        let color_or = |c: &Option<String>, default: egui::Color32| c.as_deref().and_then(parse_hex_color).unwrap_or(default);
+        let dark = egui::Color32::from_rgb(30, 30, 30);
+        let popup_colors = super::popup::PopupColors {
+            accept:     (color_or(&config.app.accept_color_bg, egui::Color32::from_rgb(102, 187, 106)),
+                         color_or(&config.app.accept_color_fg, dark)),
+            ignore:     (color_or(&config.app.ignore_color_bg, egui::Color32::from_rgb(229, 115, 115)),
+                         color_or(&config.app.ignore_color_fg, dark)),
+            dictionary: (color_or(&config.app.dictionary_color_bg, egui::Color32::from_rgb(100, 181, 246)),
+                         color_or(&config.app.dictionary_color_fg, dark)),
+        };
+
         let (current_project, dictionary, file_tree) = match &config.app.last_project {
             Some(path) if path.is_dir() => {
                 let dict = Dictionary::load(path);
@@ -65,6 +80,10 @@ impl App {
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
+            popup_open: false,
+            popup_opened_at: 0.0,
+            popup_armed: false,
+            popup_colors,
             accent_bg,
             accent_fg,
             selection_bg,
@@ -77,6 +96,7 @@ impl App {
         self.open_file = None;
         self.lt_results.clear();
         self.selected_match = None;
+        self.popup_open = false;
 
         self.dictionary = Dictionary::load(&path);
         self.file_tree = FileTree::load(&path);
@@ -94,6 +114,7 @@ impl App {
                 self.open_file = Some(FileBuffer { path, content, modified: false });
                 self.lt_results.clear();
                 self.selected_match = None;
+                self.popup_open = false;
                 self.app_error = None;
             }
             Err(e) => {
@@ -115,6 +136,82 @@ impl App {
             }
         }
         self.lt_running = false;
+    }
+
+    fn open_popup(&mut self, i: usize) {
+        self.selected_match = Some(i);
+        self.popup_open = true;
+        self.popup_armed = false;
+    }
+
+    fn close_popup(&mut self) {
+        self.selected_match = None;
+        self.popup_open = false;
+    }
+
+    fn show_popup(&mut self, ctx: &egui::Context) {
+        if !self.popup_open {
+            return;
+        }
+        let (Some(i), Some(buf)) = (self.selected_match, self.open_file.as_ref()) else { return };
+        let Some(m) = self.lt_results.get(i) else { return };
+
+        if ctx.input(|inp| inp.pointer.any_pressed() && inp.time > self.popup_opened_at) {
+            self.popup_armed = true;
+        }
+
+        match super::popup::show(ctx, &m.word(&buf.content), m, &self.popup_colors, self.popup_armed) {
+            super::popup::Action::None            => {}
+            super::popup::Action::Close           => self.close_popup(),
+            super::popup::Action::Accept(r)       => self.accept_suggestion(i, &r),
+            super::popup::Action::Ignore          => {
+                self.lt_results[i].ignored = true;
+                self.close_popup();
+            }
+            super::popup::Action::AddToDictionary => self.add_to_dictionary(i),
+        }
+    }
+
+    /// Remplace le texte de l'erreur, décale les offsets des erreurs suivantes,
+    /// supprime celles qui chevauchaient la zone remplacée, puis écrit sur disque.
+    fn accept_suggestion(&mut self, i: usize, replacement: &str) {
+        self.close_popup();
+        let Some(buf) = self.open_file.as_mut() else { return };
+
+        let m = self.lt_results.remove(i);
+        let byte_at = |n: usize| buf.content.char_indices().nth(n).map_or(buf.content.len(), |(b, _)| b);
+        let range = byte_at(m.offset)..byte_at(m.offset + m.length);
+        buf.content.replace_range(range, replacement);
+
+        let end = m.offset + m.length;
+        let new_end = m.offset + replacement.chars().count();
+        self.lt_results.retain_mut(|o| {
+            if o.offset >= end {
+                o.offset = o.offset - end + new_end;
+                true
+            } else {
+                o.offset + o.length <= m.offset
+            }
+        });
+
+        match std::fs::write(&buf.path, &buf.content) {
+            Ok(())  => buf.modified = false,
+            Err(e)  => self.app_error = Some(format!("Impossible d'écrire '{}' : {e}", buf.path.display())),
+        }
+    }
+
+    /// Ajoute le mot au dictionnaire du projet et retire toutes ses occurrences des résultats.
+    fn add_to_dictionary(&mut self, i: usize) {
+        self.close_popup();
+        let (Some(project), Some(buf)) = (self.current_project.as_ref(), self.open_file.as_ref()) else { return };
+
+        let word = self.lt_results[i].word(&buf.content);
+        if let Err(e) = self.dictionary.add_word(&word, project) {
+            self.app_error = Some(e);
+            return;
+        }
+        let dict = &self.dictionary;
+        self.lt_results.retain(|m| !dict.is_exception(&m.word(&buf.content)));
     }
 }
 
@@ -348,8 +445,12 @@ impl eframe::App for App {
                 self.selected_match,
                 self.config.app.editor_max_width,
             ) {
-                self.selected_match = Some(i);
+                self.popup_opened_at = ui.input(|inp| inp.time);
+                self.open_popup(i);
             }
         });
+
+        let ctx = ui.ctx().clone();
+        self.show_popup(&ctx);
     }
 }

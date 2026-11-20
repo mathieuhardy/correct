@@ -46,8 +46,8 @@ pub fn show(
     ui.add_space(4.0);
     ui.separator();
 
-    if !matches.is_empty() {
-        let n = matches.len();
+    let n = matches.iter().filter(|m| !m.ignored).count();
+    if n > 0 {
         ui.label(format!("⚠ {} problème{}", n, if n > 1 { "s" } else { "" }));
         ui.add_space(4.0);
     }
@@ -55,7 +55,7 @@ pub fn show(
     // Liste collapsée : clic sur un item → le sélectionne et bascule son détail.
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.ignored) {
-            let word: String = text.chars().skip(m.offset).take(m.length).collect();
+            let word = m.word(text);
             let arrow = if m.expanded { "▾" } else { "▸" };
             let head = match m.replacements.first() {
                 Some(r) => format!("{arrow} \"{word}\" → {r}"),

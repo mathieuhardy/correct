@@ -94,6 +94,12 @@ app_color_bg       = ""  # fond de l'application en hex HTML (optionnel)
 app_color_fg       = ""  # texte de l'application en hex HTML (optionnel)
 selection_color_bg = ""  # fond du fichier actif dans l'arbre (optionnel)
 selection_color_fg = ""  # texte du fichier actif dans l'arbre (optionnel)
+accept_color_bg     = "" # survol des suggestions dans le popup (défaut vert #66BB6A)
+accept_color_fg     = "" # (défaut #1E1E1E)
+ignore_color_bg     = "" # survol de « Ignorer » (défaut rouge #E57373)
+ignore_color_fg     = "" # (défaut #1E1E1E)
+dictionary_color_bg = "" # survol de « Ajouter au dictionnaire » (défaut bleu #64B5F6)
+dictionary_color_fg = "" # (défaut #1E1E1E)
 ```
 
 Le champ `binary` est optionnel. Comportement au démarrage :
@@ -188,7 +194,7 @@ src/
 - [x] Soulignements via `egui::Painter`
 - [x] Détection de clic sur les spans d'erreur
 - [x] Items collapsés dans le panneau droit, clic pour développer
-- [ ] Popup modal : accepter / ignorer / ajouter au dictionnaire
+- [x] Popup modal : accepter / ignorer / ajouter au dictionnaire
 
 ### Phase 5 — Polish & persistance
 - [ ] Écriture immédiate sur disque à chaque modification

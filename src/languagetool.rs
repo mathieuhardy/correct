@@ -15,6 +15,13 @@ pub struct LtMatch {
     pub ignored: bool,
 }
 
+impl LtMatch {
+    /// Texte couvert par l'erreur (offsets en caractères).
+    pub fn word(&self, text: &str) -> String {
+        text.chars().skip(self.offset).take(self.length).collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LtStatus {
     Connected,

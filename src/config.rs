@@ -46,6 +46,15 @@ pub struct AppConfig {
     pub selection_color_bg: Option<String>,
     /// Texte du fichier actif dans l'arbre (optionnel).
     pub selection_color_fg: Option<String>,
+    /// Survol des suggestions dans le popup (optionnel, défaut vert).
+    pub accept_color_bg: Option<String>,
+    pub accept_color_fg: Option<String>,
+    /// Survol du bouton « Ignorer » dans le popup (optionnel).
+    pub ignore_color_bg: Option<String>,
+    pub ignore_color_fg: Option<String>,
+    /// Survol du bouton « Ajouter au dictionnaire » dans le popup (optionnel).
+    pub dictionary_color_bg: Option<String>,
+    pub dictionary_color_fg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
