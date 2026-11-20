@@ -8,7 +8,6 @@ pub struct LtMatch {
     pub offset: usize,
     pub length: usize,
     pub message: String,
-    pub rule_id: String,
     pub replacements: Vec<String>,
     pub expanded: bool,
     pub ignored: bool,
@@ -33,7 +32,6 @@ impl LtMatch {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LtStatus {
     Connected,
-    Connecting,
     Unreachable,
 }
 
@@ -61,7 +59,6 @@ struct LtResponseMatch {
 
 #[derive(Deserialize)]
 struct LtRule {
-    id: String,
     #[serde(rename = "issueType", default)]
     issue_type: String,
 }
@@ -72,18 +69,6 @@ struct LtReplacement {
 }
 
 impl LtClient {
-    pub fn new(url: String, language: String) -> Self {
-        Self {
-            url,
-            language,
-            child: None,
-            http: reqwest::blocking::Client::builder()
-                .timeout(Duration::from_secs(10))
-                .build()
-                .unwrap_or_default(),
-        }
-    }
-
     fn ping(http: &reqwest::blocking::Client, url: &str) -> bool {
         http.get(format!("{url}/v2/languages"))
             .timeout(Duration::from_secs(2))
@@ -170,7 +155,6 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
                 length,
                 message: m.message,
                 misspelling: m.rule.issue_type == "misspelling",
-                rule_id: m.rule.id,
                 replacements: m.replacements.into_iter().map(|r| r.value).collect(),
                 expanded: false,
                 ignored: false,
@@ -226,7 +210,7 @@ mod tests {
         let (off, len) = utf16_to_char_range(&starts, 9, 4);
         assert_eq!((off, len), (8, 4));
         let m = LtMatch {
-            offset: off, length: len, message: String::new(), rule_id: String::new(),
+            offset: off, length: len, message: String::new(),
             replacements: vec![], expanded: false, ignored: false, misspelling: true, in_dictionary: false,
         };
         assert_eq!(m.word(text), "tres");
@@ -276,7 +260,6 @@ mod tests {
         assert_eq!(m.len(), 3);
 
         assert_eq!(m[0].word(text), "tres");
-        assert_eq!(m[0].rule_id, "FR_SPELLING_RULE");
         assert_eq!(m[0].message, "Faute de frappe possible trouvée.");
         assert_eq!(m[0].replacements, vec!["très", "trees", "tes"]);
         assert!(m[0].misspelling);

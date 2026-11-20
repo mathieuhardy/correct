@@ -43,7 +43,7 @@ impl FileWatcher {
         let mut changed = false;
         while let Ok(res) = self.rx.try_recv() {
             if let Ok(ev) = res {
-                changed |= is_change(&ev) && ev.paths.iter().any(|p| *p == self.path);
+                changed |= is_change(&ev) && ev.paths.contains(&self.path);
             }
         }
         changed

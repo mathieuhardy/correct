@@ -7,6 +7,7 @@ pub enum Action {
     RemoveWord(String),
 }
 
+#[allow(clippy::too_many_arguments)] // état d'affichage passé à plat, un seul appelant
 pub fn show(
     ui: &mut egui::Ui,
     status: &LtStatus,
@@ -20,7 +21,6 @@ pub fn show(
 ) -> Action {
     let (dot_color, dot_tip) = match status {
         LtStatus::Connected   => (egui::Color32::from_rgb(80, 200, 120), "Connecté"),
-        LtStatus::Connecting  => (egui::Color32::YELLOW,                 "Connexion…"),
         LtStatus::Unreachable => (egui::Color32::from_rgb(220, 80, 80),  "Inaccessible"),
     };
 

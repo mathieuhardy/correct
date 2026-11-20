@@ -341,24 +341,24 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
     let mut fonts = egui::FontDefinitions::default();
     let mut error: Option<String> = None;
 
-    if let Some(ref name_or_path) = app_config.font_family {
-        if !name_or_path.is_empty() {
-            let bytes = if std::path::Path::new(name_or_path).is_file() {
-                std::fs::read(name_or_path)
-                    .map_err(|e| format!("Police '{name_or_path}' illisible : {e}"))
-            } else {
-                font_bytes_by_name(name_or_path)
-                    .ok_or_else(|| format!("Police '{name_or_path}' introuvable sur le système"))
-            };
-            match bytes {
-                Ok(b) => {
-                    fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(b).into());
-                    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                        fonts.families.entry(family).or_default().insert(0, "custom".to_owned());
-                    }
+    if let Some(ref name_or_path) = app_config.font_family
+        && !name_or_path.is_empty()
+    {
+        let bytes = if std::path::Path::new(name_or_path).is_file() {
+            std::fs::read(name_or_path)
+                .map_err(|e| format!("Police '{name_or_path}' illisible : {e}"))
+        } else {
+            font_bytes_by_name(name_or_path)
+                .ok_or_else(|| format!("Police '{name_or_path}' introuvable sur le système"))
+        };
+        match bytes {
+            Ok(b) => {
+                fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(b).into());
+                for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+                    fonts.families.entry(family).or_default().insert(0, "custom".to_owned());
                 }
-                Err(e) => error = Some(e),
             }
+            Err(e) => error = Some(e),
         }
     }
 
@@ -501,10 +501,10 @@ fn open_folder_dialog() -> Option<PathBuf> {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Ctrl+O
-        if ui.input(|i| i.key_pressed(egui::Key::O) && i.modifiers.ctrl) {
-            if let Some(path) = open_folder_dialog() {
-                self.open_project(path);
-            }
+        if ui.input(|i| i.key_pressed(egui::Key::O) && i.modifiers.ctrl)
+            && let Some(path) = open_folder_dialog()
+        {
+            self.open_project(path);
         }
 
         // Fichier ouvert modifié sur disque
@@ -513,10 +513,10 @@ impl eframe::App for App {
         }
 
         // Dictionnaire modifié sur disque (hors application ou par nous-mêmes)
-        if self.dict_watcher.as_mut().is_some_and(|w| w.poll()) {
-            if let Some(project) = self.current_project.clone() {
-                self.reload_dictionary(&project);
-            }
+        if self.dict_watcher.as_mut().is_some_and(|w| w.poll())
+            && let Some(project) = self.current_project.clone()
+        {
+            self.reload_dictionary(&project);
         }
 
         // Barre de statut
@@ -538,10 +538,10 @@ impl eframe::App for App {
             .default_size(200.0)
             .show(ui, |ui| {
                 let open_clicked = panel_header(ui, "󰙅", "Explorer", abg, afg, Some("󰉗"));
-                if open_clicked {
-                    if let Some(path) = open_folder_dialog() {
-                        self.open_project(path);
-                    }
+                if open_clicked
+                    && let Some(path) = open_folder_dialog()
+                {
+                    self.open_project(path);
                 }
 
                 if self.current_project.is_some() {

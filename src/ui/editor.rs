@@ -9,7 +9,7 @@ pub fn show(
     selected: Option<usize>,
     max_width: Option<f32>,
 ) -> Option<usize> {
-    let Some(buf) = file else { return None };
+    let buf = file?;
 
     let available = ui.available_width();
     let content_w = max_width.map(|mw| mw.min(available)).unwrap_or(available);
