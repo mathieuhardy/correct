@@ -127,6 +127,25 @@ impl LtClient {
         }
     }
 
+    /// Poignée clonable pour lancer une analyse depuis un autre thread.
+    pub fn checker(&self) -> Checker {
+        Checker {
+            url: self.url.clone(),
+            language: self.language.clone(),
+            http: self.http.clone(),
+        }
+    }
+}
+
+/// Client d'analyse sans le processus LT : `Send + Clone`, utilisable hors du thread UI.
+#[derive(Clone)]
+pub struct Checker {
+    url: String,
+    language: String,
+    http: reqwest::blocking::Client,
+}
+
+impl Checker {
     /// Envoie le texte à LanguageTool et retourne toutes les correspondances
     /// (le filtrage par dictionnaire est fait par l'appelant).
     /// LT renvoie des offsets en unités UTF-16 (Java) ; ils sont convertis en index de caractères.

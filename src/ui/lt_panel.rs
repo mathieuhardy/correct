@@ -5,6 +5,7 @@ pub enum Action {
     Analyse,
     Select(usize),
     RemoveWord(String),
+    Stop,
 }
 
 #[allow(clippy::too_many_arguments)] // état d'affichage passé à plat, un seul appelant
@@ -41,9 +42,19 @@ pub fn show(
             action = Action::Analyse;
         }
 
-        // Bouton stop — actif uniquement si une analyse tourne (async, Phase 5).
-        ui.add_enabled(running, egui::Button::new("■"))
-            .on_hover_text("Arrêter");
+        // Bouton stop — actif uniquement si une analyse tourne.
+        if ui
+            .add_enabled(running, egui::Button::new("■"))
+            .on_hover_text("Arrêter")
+            .clicked()
+        {
+            action = Action::Stop;
+        }
+
+        if running {
+            ui.add(egui::Spinner::new());
+            ui.label(egui::RichText::new("Analyse…").weak());
+        }
     });
 
     ui.add_space(4.0);

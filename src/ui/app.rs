@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::dictionary::Dictionary;
 use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use super::file_tree::FileTree;
 use crate::watcher::{DictWatcher, FileWatcher};
@@ -19,7 +20,8 @@ pub struct App {
     pub open_file: Option<FileBuffer>,
     pub file_tree: FileTree,
     pub lt_results: Vec<LtMatch>,
-    pub lt_running: bool,
+    /// Analyse LT en cours sur un thread (None = aucune).
+    analysis: Option<PendingAnalysis>,
     pub selected_match: Option<usize>,
     pub popup_open: bool,
     pub popup_opened_at: f64,
@@ -30,6 +32,14 @@ pub struct App {
     pub selection_bg: Option<egui::Color32>,
     pub selection_fg: Option<egui::Color32>,
     pub app_error: Option<String>,
+}
+
+/// Analyse lancée sur un thread. Le résultat n'est appliqué que si le fichier ouvert
+/// et son contenu sont toujours ceux analysés ; l'abandonner (drop) l'annule.
+struct PendingAnalysis {
+    path: PathBuf,
+    text: String,
+    rx: Receiver<Result<Vec<LtMatch>, String>>,
 }
 
 pub struct FileBuffer {
@@ -126,7 +136,7 @@ impl App {
             open_file: None,
             file_tree: FileTree::empty(),
             lt_results: Vec::new(),
-            lt_running: false,
+            analysis: None,
             selected_match: None,
             popup_open: false,
             popup_opened_at: 0.0,
@@ -199,6 +209,7 @@ impl App {
     pub fn open_project(&mut self, path: PathBuf) {
         self.open_file = None;
         self.file_watcher = None;
+        self.analysis = None;
         self.lt_results.clear();
         self.selected_match = None;
         self.popup_open = false;
@@ -230,6 +241,8 @@ impl App {
                     content,
                     modified: false,
                 });
+                // Analyse automatique à l'ouverture, en arrière-plan.
+                self.start_analysis();
             }
             Err(e) => {
                 self.app_error = Some(format!("Impossible de lire '{}' : {e}", path.display()));
@@ -257,29 +270,77 @@ impl App {
             return;
         }
         buf.content = content;
-        self.lt_results.clear();
-        self.close_popup();
-        if self.lt_status == LtStatus::Connected {
-            self.run_analysis();
-        }
+        self.start_analysis();
     }
 
-    fn run_analysis(&mut self) {
-        let Some(ref buf) = self.open_file else {
+    /// Lance l'analyse du fichier ouvert sur un thread (remplace toute analyse en cours).
+    /// Vide le panneau ; sans connexion LT, se contente d'annuler l'analyse précédente.
+    fn start_analysis(&mut self) {
+        self.lt_results.clear();
+        self.close_popup();
+        self.analysis = None;
+
+        let Some(buf) = self.open_file.as_ref() else {
             return;
         };
-        self.lt_running = true;
-        match self.lt_client.check(&buf.content) {
+        if self.lt_status != LtStatus::Connected {
+            return;
+        }
+
+        let (tx, rx) = channel();
+        let checker = self.lt_client.checker();
+        let ctx = self.ctx.clone();
+        let text = buf.content.clone();
+        let thread_text = text.clone();
+        std::thread::spawn(move || {
+            // Réception abandonnée (annulation, autre fichier) : envoi ignoré.
+            let _ = tx.send(checker.check(&thread_text));
+            ctx.request_repaint();
+        });
+
+        self.analysis = Some(PendingAnalysis {
+            path: buf.path.clone(),
+            text,
+            rx,
+        });
+    }
+
+    /// Applique le résultat de l'analyse s'il est arrivé.
+    fn poll_analysis(&mut self) {
+        let Some(pending) = self.analysis.as_ref() else {
+            return;
+        };
+        let result = match pending.rx.try_recv() {
+            Ok(r) => r,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                self.analysis = None;
+                return;
+            }
+        };
+        let Some(pending) = self.analysis.take() else {
+            return;
+        };
+
+        let Some(buf) = self.open_file.as_ref() else {
+            return;
+        };
+        if buf.path != pending.path {
+            return;
+        }
+        if buf.content != pending.text {
+            // Le texte a changé pendant l'analyse : offsets périmés, on relance.
+            self.start_analysis();
+            return;
+        }
+        match result {
             Ok(matches) => {
                 self.lt_results = matches;
                 self.app_error = None;
                 self.refilter();
             }
-            Err(e) => {
-                self.app_error = Some(e);
-            }
+            Err(e) => self.app_error = Some(e),
         }
-        self.lt_running = false;
     }
 
     fn open_popup(&mut self, i: usize) {
@@ -608,6 +669,9 @@ impl eframe::App for App {
             self.open_project(path);
         }
 
+        // Résultat d'analyse arrivé depuis le thread
+        self.poll_analysis();
+
         // Fichier ouvert modifié sur disque
         if self.file_watcher.as_mut().is_some_and(|w| w.poll()) {
             self.reload_open_file();
@@ -683,10 +747,11 @@ impl eframe::App for App {
                     self.selected_match,
                     self.selection_bg,
                     self.selection_fg,
-                    self.lt_running,
+                    self.analysis.is_some(),
                 );
                 match action {
-                    super::lt_panel::Action::Analyse => self.run_analysis(),
+                    super::lt_panel::Action::Analyse => self.start_analysis(),
+                    super::lt_panel::Action::Stop => self.analysis = None,
                     super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
                     super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
                     super::lt_panel::Action::None => {}
