@@ -204,7 +204,7 @@ src/
 - [x] Offsets LT en unités UTF-16 → conversion en index de caractères (mot extrait, filtrage et soulignement faux après un emoji)
 
 ### Phase 5 — Polish & persistance
-- [ ] Écriture immédiate sur disque à chaque modification
+- [x] Écriture immédiate sur disque à chaque modification (éditeur en lecture seule : à chaque suggestion acceptée)
 - [ ] Watch filesystem sur le fichier ouvert (`notify`) : reload + relance analyse automatique
 - [ ] Libération propre du watcher au switch/fermeture de fichier (drop)
 - [ ] Barre de statut en bas : icône rouge + message pour toute erreur applicative
