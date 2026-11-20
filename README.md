@@ -207,7 +207,7 @@ src/
 - [x] Écriture immédiate sur disque à chaque modification (éditeur en lecture seule : à chaque suggestion acceptée)
 - [x] Watch filesystem sur le fichier ouvert (`notify`) : reload + relance analyse automatique
 - [x] Libération propre du watcher au switch/fermeture de fichier (drop)
-- [ ] Barre de statut en bas : icône rouge + message pour toute erreur applicative
+- [x] Barre de statut en bas : icône rouge + message pour toute erreur applicative
 - [ ] Réouverture du dernier projet au démarrage
 - [ ] Tests unitaires (config, dictionnaire, parsing réponse LT)
 

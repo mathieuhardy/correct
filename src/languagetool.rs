@@ -94,41 +94,41 @@ impl LtClient {
 
     /// Tente de se connecter au serveur LT. Si inaccessible et qu'un binaire est configuré,
     /// le lance puis retente jusqu'à ~5 s.
-    pub fn init(config: &LanguageToolConfig) -> (Self, LtStatus) {
+    /// Retourne aussi un message d'erreur si LT reste inaccessible.
+    pub fn init(config: &LanguageToolConfig) -> (Self, LtStatus, Option<String>) {
         let http = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .unwrap_or_default();
+        let reachable = Self::ping(&http, &config.url);
+        let client = |child| Self { url: config.url.clone(), language: config.language.clone(), child, http };
 
-        if Self::ping(&http, &config.url) {
-            return (
-                Self { url: config.url.clone(), language: config.language.clone(), child: None, http },
-                LtStatus::Connected,
-            );
+        if reachable {
+            return (client(None), LtStatus::Connected, None);
         }
 
-        if let Some(ref binary) = config.binary {
-            if let Ok(child) = std::process::Command::new(binary).spawn() {
-                let client = Self {
-                    url: config.url.clone(),
-                    language: config.language.clone(),
-                    child: Some(child),
-                    http,
-                };
+        let unreachable = format!("Impossible de joindre LanguageTool ({})", config.url);
+        let Some(ref binary) = config.binary else {
+            return (client(None), LtStatus::Unreachable, Some(unreachable));
+        };
+
+        match std::process::Command::new(binary).spawn() {
+            Ok(child) => {
+                let client = client(Some(child));
                 for _ in 0..10 {
                     std::thread::sleep(Duration::from_millis(500));
                     if Self::ping(&client.http, &client.url) {
-                        return (client, LtStatus::Connected);
+                        return (client, LtStatus::Connected, None);
                     }
                 }
-                return (client, LtStatus::Unreachable);
+                let msg = format!("{unreachable} : '{}' lancé mais ne répond pas après 5 s", binary.display());
+                (client, LtStatus::Unreachable, Some(msg))
+            }
+            Err(e) => {
+                let msg = format!("{unreachable} : impossible de lancer '{}' : {e}", binary.display());
+                (client(None), LtStatus::Unreachable, Some(msg))
             }
         }
-
-        (
-            Self { url: config.url.clone(), language: config.language.clone(), child: None, http },
-            LtStatus::Unreachable,
-        )
     }
 
     /// Envoie le texte à LanguageTool et retourne toutes les correspondances

@@ -40,14 +40,19 @@ pub struct FileBuffer {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext) -> Self {
-        let config = Config::load();
+        let (config, config_error) = Config::load();
+        let mut errors: Vec<String> = config_error.into_iter().collect();
+        errors.extend(invalid_colors(&config.app));
 
         // Thème sombre par défaut — l'utilisateur contrôle les couleurs via la config.
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         apply_colors(&cc.egui_ctx, &config.app);
         let font_error = apply_font(&cc.egui_ctx, &config.app);
 
-        let (lt_client, lt_status) = LtClient::init(&config.languagetool);
+        errors.extend(font_error);
+
+        let (lt_client, lt_status, lt_error) = LtClient::init(&config.languagetool);
+        errors.extend(lt_error);
 
         let accent_bg    = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
         let accent_fg    = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
@@ -89,11 +94,14 @@ impl App {
             accent_fg,
             selection_bg,
             selection_fg,
-            app_error: font_error,
+            app_error: None,
         };
         if let Some(path) = last_project {
             app.load_project(path);
         }
+        // Toutes les erreurs de démarrage sont affichées ensemble dans la barre de statut.
+        errors.extend(app.app_error.take());
+        app.app_error = (!errors.is_empty()).then(|| errors.join("  •  "));
         app
     }
 
@@ -428,6 +436,32 @@ fn contrasting_text_color(bg: egui::Color32) -> egui::Color32 {
     }
 }
 
+/// Couleurs renseignées dans la config mais qui ne sont pas au format `#RRGGBB`.
+fn invalid_colors(app: &crate::config::AppConfig) -> Vec<String> {
+    [
+        ("accent_color_bg", &app.accent_color_bg),
+        ("accent_color_fg", &app.accent_color_fg),
+        ("app_color_bg", &app.app_color_bg),
+        ("app_color_fg", &app.app_color_fg),
+        ("selection_color_bg", &app.selection_color_bg),
+        ("selection_color_fg", &app.selection_color_fg),
+        ("accept_color_bg", &app.accept_color_bg),
+        ("accept_color_fg", &app.accept_color_fg),
+        ("ignore_color_bg", &app.ignore_color_bg),
+        ("ignore_color_fg", &app.ignore_color_fg),
+        ("dictionary_color_bg", &app.dictionary_color_bg),
+        ("dictionary_color_fg", &app.dictionary_color_fg),
+    ]
+    .into_iter()
+    .filter_map(|(key, value)| {
+        let v = value.as_deref().filter(|v| !v.is_empty())?;
+        parse_hex_color(v)
+            .is_none()
+            .then(|| format!("Couleur invalide pour {key} : \"{v}\" (attendu #RRGGBB)"))
+    })
+    .collect()
+}
+
 fn parse_hex_color(hex: &str) -> Option<egui::Color32> {
     let hex = hex.trim_start_matches('#');
     if hex.len() == 6 {
@@ -482,8 +516,13 @@ impl eframe::App for App {
 
         // Barre de statut
         if let Some(ref err) = self.app_error.clone() {
+            // Texte 3 pt sous la taille configurée, non gras.
+            let size = (self.config.app.font_size - 3.0).max(8.0);
             egui::Panel::bottom("status_bar").show(ui, |ui| {
-                ui.colored_label(egui::Color32::RED, format!("⬤  {err}"));
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("⬤").size(size).color(egui::Color32::RED));
+                    ui.label(egui::RichText::new(err).size(size).color(egui::Color32::RED));
+                });
             });
         }
 
