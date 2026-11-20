@@ -86,6 +86,8 @@ fn hover_button(
             w.weak_bg_fill = bg;
             w.bg_fill = bg;
             w.fg_stroke.color = fg;
+            // Bordure de la couleur du fond : pas de liseré contrasté au survol.
+            w.bg_stroke.color = bg;
         }
         // Pas de wrap interne : un bouton trop long passe à la ligne au lieu d'être écrasé.
         ui.add(egui::Button::new(label).wrap_mode(egui::TextWrapMode::Extend))
