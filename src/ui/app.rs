@@ -70,7 +70,12 @@ impl App {
                          color_or(&config.app.dictionary_color_fg, dark)),
         };
 
-        let last_project = config.app.last_project.clone().filter(|p| p.is_dir());
+        // `last_project = ""` signifie « aucun projet » ; un chemin disparu est signalé.
+        let last_project = config.app.last_project.clone().filter(|p| !p.as_os_str().is_empty());
+        if let Some(p) = last_project.as_ref().filter(|p| !p.is_dir()) {
+            errors.push(format!("Dernier projet introuvable : {}", p.display()));
+        }
+        let last_project = last_project.filter(|p| p.is_dir());
 
         let mut app = Self {
             config,
