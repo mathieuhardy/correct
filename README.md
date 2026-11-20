@@ -186,7 +186,7 @@ src/
 
 ### Phase 4 — Affichage des erreurs & interactions
 - [x] Soulignements via `egui::Painter`
-- [ ] Détection de clic sur les spans d'erreur
+- [x] Détection de clic sur les spans d'erreur
 - [ ] Items collapsés dans le panneau droit, clic pour développer
 - [ ] Popup modal : accepter / ignorer / ajouter au dictionnaire
 
