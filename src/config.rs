@@ -32,6 +32,11 @@ pub struct AppConfig {
     pub font_family: Option<String>,
     /// Multiplicateur d'interligne dans l'éditeur (1.0 = défaut, 1.5 = 150 %).
     pub line_height: f32,
+    /// Hinting des glyphes (calage sur la grille de pixels). Défaut : true.
+    pub font_hinting: bool,
+    /// Gamma de l'anticrénelage du texte (ex. 1.0 = traits plus fins et plus lisses).
+    /// Absent : réglage egui par défaut du thème sombre, plus gras.
+    pub font_gamma: Option<f32>,
     /// Largeur max du texte en pixels pour le mode centré (optionnel).
     pub editor_max_width: Option<f32>,
     /// Couleur de fond des en-têtes en hex HTML, ex. "#5277C3" (optionnel).
@@ -64,6 +69,8 @@ impl Default for AppConfig {
             font_size: 14.0,
             font_family: None,
             line_height: 1.0,
+            font_hinting: true,
+            font_gamma: None,
             editor_max_width: None,
             accent_color_bg: None,
             accent_color_fg: None,
@@ -149,6 +156,14 @@ impl Config {
             ));
             self.app.line_height = default.line_height;
         }
+        if let Some(g) = self.app.font_gamma
+            && (g <= 0.0 || !g.is_finite())
+        {
+            errors.push(format!(
+                "font_gamma invalide ({g}), réglage par défaut utilisé"
+            ));
+            self.app.font_gamma = None;
+        }
         (!errors.is_empty()).then(|| errors.join("  •  "))
     }
 
@@ -213,16 +228,21 @@ mod tests {
     fn zero_or_negative_sizes_are_reported_and_replaced() {
         let path = tmp_path();
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "[app]\nfont_size = 0\nline_height = -1\n").unwrap();
+        std::fs::write(
+            &path,
+            "[app]\nfont_size = 0\nline_height = -1\nfont_gamma = 0\n",
+        )
+        .unwrap();
 
         let (cfg, err) = Config::load_from(&path);
         let err = err.unwrap();
         assert!(
-            err.contains("font_size") && err.contains("line_height"),
+            err.contains("font_size") && err.contains("line_height") && err.contains("font_gamma"),
             "{err}"
         );
         assert_eq!(cfg.app.font_size, 14.0);
         assert_eq!(cfg.app.line_height, 1.0);
+        assert_eq!(cfg.app.font_gamma, None);
     }
 
     /// Clés ou sections manquantes : valeurs par défaut, pas d'erreur.

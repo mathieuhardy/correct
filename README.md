@@ -87,6 +87,8 @@ last_project = ""
 font_size    = 14.0
 font_family  = ""        # chemin vers un fichier .ttf/.otf ou nom de famille (optionnel)
 line_height  = 1.0       # multiplicateur d'interligne dans l'éditeur (1.5 = 150 %)
+font_hinting = true      # calage des glyphes sur les pixels (false = un peu plus doux)
+font_gamma   = 1.0       # lissage du texte : 1.0 = traits fins et lisses (absent = défaut egui, plus gras)
 editor_max_width = 720   # largeur max du texte en pixels pour le mode centré (optionnel)
 accent_color_bg = ""     # fond des en-têtes de panneaux en hex HTML, ex. "#5277C3" (optionnel)
 accent_color_fg = ""     # texte des en-têtes de panneaux en hex HTML, ex. "#ffffff" (optionnel)
@@ -213,7 +215,7 @@ src/
 
 ### Bugs trouvés
 - [x] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
-- [ ] Police pixelisée
+- [x] Police pixelisée (lissage via `font_gamma`, hinting via `font_hinting`)
 
 ### Commandes
 

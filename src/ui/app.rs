@@ -512,6 +512,17 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
 
     ctx.set_fonts(fonts);
 
+    // Rendu du texte : hinting et gamma de l'anticrénelage (lissage).
+    for theme in [egui::Theme::Dark, egui::Theme::Light] {
+        ctx.style_mut_of(theme, |s| {
+            let opts = &mut s.visuals.text_options;
+            opts.font_hinting = app_config.font_hinting;
+            if let Some(g) = app_config.font_gamma {
+                opts.color_transfer_function = egui::epaint::FontColorTransferFunction::Gamma(g);
+            }
+        });
+    }
+
     if (app_config.font_size - DEFAULT_SIZE).abs() > f32::EPSILON {
         let scale = app_config.font_size / DEFAULT_SIZE;
         for theme in [egui::Theme::Dark, egui::Theme::Light] {
