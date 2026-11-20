@@ -320,14 +320,21 @@ impl eframe::App for App {
             .default_size(260.0)
             .show(ui, |ui| {
                 panel_header(ui, "󰓆", "LanguageTool", abg, afg, None);
+                let text = self.open_file.as_ref().map(|f| f.content.as_str()).unwrap_or("");
                 let action = super::lt_panel::show(
                     ui,
                     &self.lt_status,
-                    &self.lt_results,
+                    text,
+                    &mut self.lt_results,
+                    self.selected_match,
+                    self.selection_bg,
+                    self.selection_fg,
                     self.lt_running,
                 );
-                if matches!(action, super::lt_panel::Action::Analyse) {
-                    self.run_analysis();
+                match action {
+                    super::lt_panel::Action::Analyse   => self.run_analysis(),
+                    super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
+                    super::lt_panel::Action::None      => {}
                 }
             });
 

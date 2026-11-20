@@ -187,7 +187,7 @@ src/
 ### Phase 4 — Affichage des erreurs & interactions
 - [x] Soulignements via `egui::Painter`
 - [x] Détection de clic sur les spans d'erreur
-- [ ] Items collapsés dans le panneau droit, clic pour développer
+- [x] Items collapsés dans le panneau droit, clic pour développer
 - [ ] Popup modal : accepter / ignorer / ajouter au dictionnaire
 
 ### Phase 5 — Polish & persistance
@@ -200,6 +200,7 @@ src/
 
 ### Bugs trouvés
 - [ ] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
+- [ ] Police pixelisée
 
 ### Commandes
 
