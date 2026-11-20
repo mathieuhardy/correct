@@ -213,6 +213,15 @@ src/
 - [x] Réouverture du dernier projet au démarrage
 - [x] Tests unitaires (config, dictionnaire, parsing réponse LT)
 
+### Phase 6 — Ignorés persistants
+- [x] `LtMatch` : identifiant de règle et phrase (`sentence`) issus de la réponse LT
+- [x] Empreinte d'un élément ignoré : règle + texte + phrase aux espaces normalisés (indépendante de la position)
+- [x] `.correct/ignored.toml` : liste plate d'entrées `{ file, rule, text, sentence }`, chemins relatifs au projet, triée, écriture atomique, fichier invalide → erreur et écriture bloquée
+- [x] « Ignorer » persiste l'empreinte ; un élément est ignoré si son empreinte figure dans la liste
+- [x] Réconciliation après chaque analyse réussie et à jour : empreintes du fichier sans correspondance purgées (aucune purge sur erreur, annulation ou résultat périmé)
+- [x] Rechargement si `ignored.toml` est modifié hors de l'application ; entrées des fichiers disparus retirées à l'ouverture du projet
+- [x] Tests : empreinte qui survit à un déplacement / re-wrap, purge limitée au fichier analysé, fichiers disparus, liste vide → fichier supprimé, fichier invalide jamais écrasé
+
 ### Bugs trouvés
 - [x] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
 - [x] Police pixelisée (lissage via `font_gamma`, hinting via `font_hinting`)

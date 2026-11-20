@@ -9,7 +9,12 @@ pub struct LtMatch {
     pub length: usize,
     pub message: String,
     pub replacements: Vec<String>,
+    /// Identifiant de la règle LT (ex. `FR_SPELLING_RULE`) : partie de l'empreinte d'un ignoré.
+    pub rule_id: String,
+    /// Phrase contenant l'erreur, espaces normalisés : partie de l'empreinte d'un ignoré.
+    pub sentence: String,
     pub expanded: bool,
+    /// Empreinte présente dans `.correct/ignored.toml` (recalculé à chaque analyse / rechargement).
     pub ignored: bool,
     /// Faute d'orthographe (`issueType = misspelling`) : seule éligible au dictionnaire.
     pub misspelling: bool,
@@ -26,6 +31,25 @@ impl LtMatch {
     /// Masquée dans l'éditeur et le panneau (ignorée ou dans le dictionnaire).
     pub fn hidden(&self) -> bool {
         self.ignored || self.in_dictionary
+    }
+}
+
+#[cfg(test)]
+impl LtMatch {
+    /// Correspondance minimale pour les tests.
+    pub fn for_test(offset: usize, length: usize, rule_id: &str, sentence: &str) -> Self {
+        Self {
+            offset,
+            length,
+            message: String::new(),
+            replacements: vec![],
+            rule_id: rule_id.to_string(),
+            sentence: normalize_spaces(sentence),
+            expanded: false,
+            ignored: false,
+            misspelling: true,
+            in_dictionary: false,
+        }
     }
 }
 
@@ -55,10 +79,13 @@ struct LtResponseMatch {
     rule: LtRule,
     #[serde(default)]
     replacements: Vec<LtReplacement>,
+    #[serde(default)]
+    sentence: String,
 }
 
 #[derive(Deserialize)]
 struct LtRule {
+    id: String,
     #[serde(rename = "issueType", default)]
     issue_type: String,
 }
@@ -188,6 +215,8 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
                 length,
                 message: m.message,
                 misspelling: m.rule.issue_type == "misspelling",
+                rule_id: m.rule.id,
+                sentence: normalize_spaces(&m.sentence),
                 replacements: m.replacements.into_iter().map(|r| r.value).collect(),
                 expanded: false,
                 ignored: false,
@@ -195,6 +224,12 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
             }
         })
         .collect())
+}
+
+/// Réduit toute suite d'espaces / retours à la ligne à un espace : un re-wrap du paragraphe
+/// ne change pas la phrase.
+pub fn normalize_spaces(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Offset UTF-16 du début de chaque caractère, plus la longueur totale en dernier élément.
@@ -242,16 +277,7 @@ mod tests {
         let starts = utf16_starts(text);
         let (off, len) = utf16_to_char_range(&starts, 9, 4);
         assert_eq!((off, len), (8, 4));
-        let m = LtMatch {
-            offset: off,
-            length: len,
-            message: String::new(),
-            replacements: vec![],
-            expanded: false,
-            ignored: false,
-            misspelling: true,
-            in_dictionary: false,
-        };
+        let m = LtMatch::for_test(off, len, "FR_SPELLING_RULE", "");
         assert_eq!(m.word(text), "tres");
     }
 
@@ -299,6 +325,8 @@ mod tests {
         assert_eq!(m.len(), 3);
 
         assert_eq!(m[0].word(text), "tres");
+        assert_eq!(m[0].rule_id, "FR_SPELLING_RULE");
+        assert_eq!(m[0].sentence, "😀 C'est tres bien.");
         assert_eq!(m[0].message, "Faute de frappe possible trouvée.");
         assert_eq!(m[0].replacements, vec!["très", "trees", "tes"]);
         assert!(m[0].misspelling);
@@ -326,6 +354,14 @@ mod tests {
                 .contains("invalide")
         );
         assert!(parse_matches("ok", r#"{"software": {}}"#).is_err());
+    }
+
+    #[test]
+    fn sentence_spaces_are_normalized() {
+        assert_eq!(
+            normalize_spaces("Le dossier est tres\nimportant.  "),
+            "Le dossier est tres important."
+        );
     }
 
     #[test]

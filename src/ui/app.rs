@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::dictionary::Dictionary;
+use crate::ignored::{Ignored, IgnoredList, relative_path};
 use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
@@ -10,6 +11,8 @@ use crate::watcher::{DictWatcher, FileWatcher};
 pub struct App {
     pub config: Config,
     pub dictionary: Dictionary,
+    /// Éléments ignorés du projet (`.correct/ignored.toml`).
+    pub ignored: IgnoredList,
     pub dict_watcher: Option<DictWatcher>,
     /// Watch du fichier ouvert ; remplacé (et l'ancien libéré par drop) à chaque ouverture.
     pub file_watcher: Option<FileWatcher>,
@@ -127,6 +130,7 @@ impl App {
         let mut app = Self {
             config,
             dictionary: Dictionary::default(),
+            ignored: IgnoredList::default(),
             dict_watcher: None,
             file_watcher: None,
             ctx: cc.egui_ctx.clone(),
@@ -160,6 +164,14 @@ impl App {
     /// Charge le dictionnaire, l'arbre et le watch du dictionnaire d'un projet.
     fn load_project(&mut self, path: PathBuf) {
         self.reload_dictionary(&path);
+        self.reload_ignored(&path);
+        // Entrées des fichiers supprimés / renommés depuis la dernière session.
+        if !self.ignored.is_locked()
+            && self.ignored.prune_missing(&path)
+            && let Err(e) = self.ignored.save(&path)
+        {
+            self.app_error = Some(e);
+        }
         self.dict_watcher = match DictWatcher::new(&path, self.ctx.clone()) {
             Ok(w) => Some(w),
             Err(e) => {
@@ -191,11 +203,15 @@ impl App {
 
     /// Recalcule `in_dictionary` pour chaque résultat ; ferme le popup si son erreur disparaît.
     fn refilter(&mut self) {
+        let file = self.relative_open_file();
         let Some(buf) = self.open_file.as_ref() else {
             return;
         };
         for m in &mut self.lt_results {
             m.in_dictionary = self.dictionary.is_exception(&m.word(&buf.content));
+            m.ignored = file
+                .as_deref()
+                .is_some_and(|f| self.ignored.contains(&Ignored::of(f, m, &buf.content)));
         }
         if self
             .selected_match
@@ -203,6 +219,91 @@ impl App {
             .is_some_and(|m| m.hidden())
         {
             self.close_popup();
+        }
+    }
+
+    /// (Re)lit la liste des ignorés. Invalide : erreur affichée et liste verrouillée.
+    fn reload_ignored(&mut self, project: &std::path::Path) {
+        match IgnoredList::load(project) {
+            Ok(list) => {
+                if self.ignored.is_locked() {
+                    self.app_error = None;
+                }
+                self.ignored = list;
+            }
+            Err(e) => {
+                self.app_error = Some(e);
+                self.ignored = IgnoredList::locked();
+            }
+        }
+        self.refilter();
+    }
+
+    /// Chemin du fichier ouvert relatif au projet (clé des ignorés).
+    fn relative_open_file(&self) -> Option<String> {
+        let project = self.current_project.as_ref()?;
+        let buf = self.open_file.as_ref()?;
+        Some(relative_path(project, &buf.path))
+    }
+
+    /// Persiste l'empreinte de l'erreur `i` dans les ignorés du projet.
+    fn ignore_match(&mut self, i: usize) {
+        self.close_popup();
+        let file = self.relative_open_file();
+        let (Some(project), Some(buf), Some(file)) =
+            (self.current_project.as_ref(), self.open_file.as_ref(), file)
+        else {
+            return;
+        };
+        let Some(m) = self.lt_results.get(i) else {
+            return;
+        };
+        let entry = Ignored::of(&file, m, &buf.content);
+        if self.ignored.add(entry.clone())
+            && let Err(e) = self.ignored.save(project)
+        {
+            self.ignored.remove(&entry);
+            self.app_error = Some(e);
+            return;
+        }
+        self.refilter();
+    }
+
+    /// Retire une empreinte des ignorés : l'erreur réapparaît si elle est toujours signalée.
+    fn unignore(&mut self, entry: &Ignored) {
+        let Some(project) = self.current_project.as_ref() else {
+            return;
+        };
+        self.ignored.remove(entry);
+        if let Err(e) = self.ignored.save(project) {
+            self.ignored.add(entry.clone());
+            self.app_error = Some(e);
+            return;
+        }
+        self.refilter();
+    }
+
+    /// Après une analyse réussie et à jour : retire les empreintes de ce fichier qui ne
+    /// correspondent plus à aucune erreur (mot supprimé, corrigé ou phrase modifiée).
+    fn reconcile_ignored(&mut self) {
+        if self.ignored.is_locked() {
+            return;
+        }
+        let file = self.relative_open_file();
+        let (Some(project), Some(buf), Some(file)) =
+            (self.current_project.as_ref(), self.open_file.as_ref(), file)
+        else {
+            return;
+        };
+        let current: Vec<Ignored> = self
+            .lt_results
+            .iter()
+            .map(|m| Ignored::of(&file, m, &buf.content))
+            .collect();
+        if self.ignored.prune(&file, &current)
+            && let Err(e) = self.ignored.save(project)
+        {
+            self.app_error = Some(e);
         }
     }
 
@@ -337,6 +438,7 @@ impl App {
             Ok(matches) => {
                 self.lt_results = matches;
                 self.app_error = None;
+                self.reconcile_ignored();
                 self.refilter();
             }
             Err(e) => self.app_error = Some(e),
@@ -379,10 +481,7 @@ impl App {
             super::popup::Action::None => {}
             super::popup::Action::Close => self.close_popup(),
             super::popup::Action::Accept(r) => self.accept_suggestion(i, &r),
-            super::popup::Action::Ignore => {
-                self.lt_results[i].ignored = true;
-                self.close_popup();
-            }
+            super::popup::Action::Ignore => self.ignore_match(i),
             super::popup::Action::AddToDictionary => self.add_to_dictionary(i),
         }
     }
@@ -693,6 +792,7 @@ impl eframe::App for App {
             && let Some(project) = self.current_project.clone()
         {
             self.reload_dictionary(&project);
+            self.reload_ignored(&project);
         }
 
         // Barre de statut
@@ -749,12 +849,14 @@ impl eframe::App for App {
                     .as_ref()
                     .map(|f| f.content.as_str())
                     .unwrap_or("");
+                let file_ignored = self.relative_open_file().map(|f| self.ignored.for_file(&f));
                 let action = super::lt_panel::show(
                     ui,
                     &self.lt_status,
                     text,
                     &mut self.lt_results,
                     &self.dictionary.words,
+                    file_ignored.as_deref(),
                     self.selected_match,
                     self.selection_bg,
                     self.selection_fg,
@@ -765,6 +867,7 @@ impl eframe::App for App {
                     super::lt_panel::Action::Stop => self.analysis = None,
                     super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
                     super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
+                    super::lt_panel::Action::Unignore(e) => self.unignore(&e),
                     super::lt_panel::Action::None => {}
                 }
             });

@@ -1,3 +1,4 @@
+use crate::ignored::Ignored;
 use crate::languagetool::{LtMatch, LtStatus};
 
 pub enum Action {
@@ -5,6 +6,7 @@ pub enum Action {
     Analyse,
     Select(usize),
     RemoveWord(String),
+    Unignore(Ignored),
     Stop,
 }
 
@@ -15,6 +17,7 @@ pub fn show(
     text: &str,
     matches: &mut [LtMatch],
     dictionary: &[String],
+    ignored: Option<&[Ignored]>,
     selected: Option<usize>,
     selection_bg: Option<egui::Color32>,
     selection_fg: Option<egui::Color32>,
@@ -80,6 +83,30 @@ pub fn show(
                 });
             }
         });
+
+    // Éléments ignorés du fichier ouvert, rétablissables un par un.
+    if let Some(ignored) = ignored {
+        egui::CollapsingHeader::new(format!("Ignorés ({})", ignored.len()))
+            .id_salt("lt_ignored")
+            .show(ui, |ui| {
+                if ignored.is_empty() {
+                    ui.label(egui::RichText::new("Aucun élément ignoré").weak());
+                }
+                for e in ignored {
+                    ui.horizontal(|ui| {
+                        if ui
+                            .small_button("✗")
+                            .on_hover_text("Ne plus ignorer")
+                            .clicked()
+                        {
+                            action = Action::Unignore(e.clone());
+                        }
+                        ui.label(format!("\"{}\"", e.text))
+                            .on_hover_text(&e.sentence);
+                    });
+                }
+            });
+    }
     ui.separator();
 
     let n = matches.iter().filter(|m| !m.hidden()).count();

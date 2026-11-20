@@ -1,5 +1,6 @@
 mod config;
 mod dictionary;
+mod ignored;
 mod languagetool;
 mod ui;
 mod watcher;
