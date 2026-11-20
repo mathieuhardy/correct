@@ -25,7 +25,10 @@
         src = ./.;
         cargoLock.lockFile = ./Cargo.lock;
 
-        nativeBuildInputs = [ pkgs.pkg-config ];
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.copyDesktopItems
+        ];
 
         buildInputs = [
           pkgs.openssl
@@ -36,6 +39,20 @@
           pkgs.libxcursor
           pkgs.libxrandr
           pkgs.libxi
+        ];
+
+        desktopItems = [
+          (pkgs.makeDesktopItem {
+            name = "correct";
+            exec = "correct";
+            desktopName = "Correct";
+            comment = "Correcteur orthographique et grammatical";
+            categories = [
+              "Office"
+              "Utility"
+            ];
+            terminal = false;
+          })
         ];
 
         doCheck = false;
@@ -75,11 +92,13 @@
         ];
 
         shellHook = ''
-          export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
-            pkgs.libGL
-            pkgs.wayland
-            pkgs.libxkbcommon
-          ]}:$LD_LIBRARY_PATH"
+          export LD_LIBRARY_PATH="${
+            pkgs.lib.makeLibraryPath [
+              pkgs.libGL
+              pkgs.wayland
+              pkgs.libxkbcommon
+            ]
+          }:$LD_LIBRARY_PATH"
         '';
       };
     };
