@@ -46,6 +46,7 @@
           (pkgs.makeDesktopItem {
             name = "correct";
             exec = "correct";
+            icon = "correct";
             desktopName = "Correct";
             comment = "Correcteur orthographique et grammatical";
             categories = [
@@ -57,12 +58,18 @@
         ];
 
         postInstall = ''
+          # Install icon
+          mkdir -p $out/share/icons/hicolor/128x128/apps
+          cp data/icon.png $out/share/icons/hicolor/128x128/apps/correct.png
+
           wrapProgram $out/bin/correct \
-            --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [
-              pkgs.wayland
-              pkgs.libGL
-              pkgs.libxkbcommon
-            ]}
+            --prefix LD_LIBRARY_PATH : ${
+              pkgs.lib.makeLibraryPath [
+                pkgs.wayland
+                pkgs.libGL
+                pkgs.libxkbcommon
+              ]
+            }
         '';
 
         doCheck = false;
