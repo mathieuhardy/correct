@@ -4,6 +4,7 @@ pub enum Action {
     None,
     Analyse,
     Select(usize),
+    RemoveWord(String),
 }
 
 pub fn show(
@@ -11,6 +12,7 @@ pub fn show(
     status: &LtStatus,
     text: &str,
     matches: &mut [LtMatch],
+    dictionary: &[String],
     selected: Option<usize>,
     selection_bg: Option<egui::Color32>,
     selection_fg: Option<egui::Color32>,
@@ -46,7 +48,25 @@ pub fn show(
     ui.add_space(4.0);
     ui.separator();
 
-    let n = matches.iter().filter(|m| !m.ignored).count();
+    // Mots du dictionnaire du projet, retirables un par un.
+    egui::CollapsingHeader::new(format!("Dictionnaire ({})", dictionary.len()))
+        .id_salt("lt_dictionary")
+        .show(ui, |ui| {
+            if dictionary.is_empty() {
+                ui.label(egui::RichText::new("Aucun mot").weak());
+            }
+            for w in dictionary {
+                ui.horizontal(|ui| {
+                    if ui.small_button("✗").on_hover_text("Retirer du dictionnaire").clicked() {
+                        action = Action::RemoveWord(w.clone());
+                    }
+                    ui.label(w);
+                });
+            }
+        });
+    ui.separator();
+
+    let n = matches.iter().filter(|m| !m.hidden()).count();
     if n > 0 {
         ui.label(format!("⚠ {} problème{}", n, if n > 1 { "s" } else { "" }));
         ui.add_space(4.0);
@@ -54,7 +74,7 @@ pub fn show(
 
     // Liste collapsée : clic sur un item → le sélectionne et bascule son détail.
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.ignored) {
+        for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.hidden()) {
             let word = m.word(text);
             let arrow = if m.expanded { "▾" } else { "▸" };
             let head = match m.replacements.first() {

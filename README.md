@@ -196,6 +196,13 @@ src/
 - [x] Items collapsés dans le panneau droit, clic pour développer
 - [x] Popup modal : accepter / ignorer / ajouter au dictionnaire
 
+### Phase 4b — Dictionnaire
+- [x] `dictionary.toml` illisible ou mal formé : erreur dans la barre de statut, sauvegarde bloquée pour ne pas écraser le fichier
+- [x] Watch de `.correct/dictionary.toml` : rechargement et re-filtrage des résultats si modifié hors de l'application
+- [x] Liste des mots du dictionnaire avec suppression depuis l'interface
+- [x] « Ajouter au dictionnaire » proposé uniquement pour les fautes d'orthographe (catégorie de règle LT), pas pour les erreurs de grammaire multi-mots
+- [x] Offsets LT en unités UTF-16 → conversion en index de caractères (mot extrait, filtrage et soulignement faux après un emoji)
+
 ### Phase 5 — Polish & persistance
 - [ ] Écriture immédiate sur disque à chaque modification
 - [ ] Watch filesystem sur le fichier ouvert (`notify`) : reload + relance analyse automatique

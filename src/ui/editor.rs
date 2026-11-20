@@ -116,10 +116,10 @@ fn segments(galley: &egui::Galley, m: &LtMatch) -> Vec<(egui::Rect, f32)> {
 }
 
 fn visible(matches: &[LtMatch]) -> impl Iterator<Item = (usize, &LtMatch)> {
-    matches.iter().enumerate().filter(|(_, m)| !m.ignored && m.length > 0)
+    matches.iter().enumerate().filter(|(_, m)| !m.hidden() && m.length > 0)
 }
 
-/// Souligne en rouge chaque erreur non ignorée ; l'erreur sélectionnée est plus épaisse.
+/// Souligne en rouge chaque erreur visible ; l'erreur sélectionnée est plus épaisse.
 fn paint_underlines(
     painter: &egui::Painter,
     galley: &egui::Galley,

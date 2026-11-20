@@ -2,6 +2,7 @@ mod config;
 mod dictionary;
 mod languagetool;
 mod ui;
+mod watcher;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

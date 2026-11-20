@@ -45,7 +45,10 @@ pub fn show(ctx: &egui::Context, word: &str, m: &LtMatch, colors: &PopupColors, 
             if hover_button(ui, "✗ Ignorer", colors.ignore).clicked() {
                 action = Action::Ignore;
             }
-            if hover_button(ui, "+ Ajouter au dictionnaire", colors.dictionary).clicked() {
+            // Seules les fautes d'orthographe vont au dictionnaire (pas les erreurs de grammaire).
+            if m.misspelling
+                && hover_button(ui, "+ Ajouter au dictionnaire", colors.dictionary).clicked()
+            {
                 action = Action::AddToDictionary;
             }
         });

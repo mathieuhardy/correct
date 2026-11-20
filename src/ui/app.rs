@@ -4,10 +4,13 @@ use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
 
 use super::file_tree::FileTree;
+use crate::watcher::DictWatcher;
 
 pub struct App {
     pub config: Config,
     pub dictionary: Dictionary,
+    pub dict_watcher: Option<DictWatcher>,
+    ctx: egui::Context,
     pub lt_client: LtClient,
     pub lt_status: LtStatus,
     pub current_project: Option<PathBuf>,
@@ -60,23 +63,18 @@ impl App {
                          color_or(&config.app.dictionary_color_fg, dark)),
         };
 
-        let (current_project, dictionary, file_tree) = match &config.app.last_project {
-            Some(path) if path.is_dir() => {
-                let dict = Dictionary::load(path);
-                let tree = FileTree::load(path);
-                (Some(path.clone()), dict, tree)
-            }
-            _ => (None, Dictionary::default(), FileTree::empty()),
-        };
+        let last_project = config.app.last_project.clone().filter(|p| p.is_dir());
 
-        Self {
+        let mut app = Self {
             config,
-            dictionary,
+            dictionary: Dictionary::default(),
+            dict_watcher: None,
+            ctx: cc.egui_ctx.clone(),
             lt_client,
             lt_status,
-            current_project,
+            current_project: None,
             open_file: None,
-            file_tree,
+            file_tree: FileTree::empty(),
             lt_results: Vec::new(),
             lt_running: false,
             selected_match: None,
@@ -89,6 +87,53 @@ impl App {
             selection_bg,
             selection_fg,
             app_error: font_error,
+        };
+        if let Some(path) = last_project {
+            app.load_project(path);
+        }
+        app
+    }
+
+    /// Charge le dictionnaire, l'arbre et le watch du dictionnaire d'un projet.
+    fn load_project(&mut self, path: PathBuf) {
+        self.reload_dictionary(&path);
+        self.dict_watcher = match DictWatcher::new(&path, self.ctx.clone()) {
+            Ok(w) => Some(w),
+            Err(e) => {
+                self.app_error = Some(e);
+                None
+            }
+        };
+        self.file_tree = FileTree::load(&path);
+        self.current_project = Some(path);
+    }
+
+    /// (Re)lit le dictionnaire. S'il est invalide : erreur affichée et dictionnaire verrouillé
+    /// (aucune écriture possible) pour ne pas écraser le fichier existant.
+    fn reload_dictionary(&mut self, project: &std::path::Path) {
+        match Dictionary::load(project) {
+            Ok(d) => {
+                if self.dictionary.is_locked() {
+                    self.app_error = None;
+                }
+                self.dictionary = d;
+            }
+            Err(e) => {
+                self.app_error = Some(e);
+                self.dictionary = Dictionary::locked();
+            }
+        }
+        self.refilter();
+    }
+
+    /// Recalcule `in_dictionary` pour chaque résultat ; ferme le popup si son erreur disparaît.
+    fn refilter(&mut self) {
+        let Some(buf) = self.open_file.as_ref() else { return };
+        for m in &mut self.lt_results {
+            m.in_dictionary = self.dictionary.is_exception(&m.word(&buf.content));
+        }
+        if self.selected_match.and_then(|i| self.lt_results.get(i)).is_some_and(|m| m.hidden()) {
+            self.close_popup();
         }
     }
 
@@ -98,9 +143,7 @@ impl App {
         self.selected_match = None;
         self.popup_open = false;
 
-        self.dictionary = Dictionary::load(&path);
-        self.file_tree = FileTree::load(&path);
-        self.current_project = Some(path.clone());
+        self.load_project(path.clone());
         self.config.app.last_project = Some(path);
 
         if let Err(e) = self.config.save() {
@@ -126,10 +169,11 @@ impl App {
     fn run_analysis(&mut self) {
         let Some(ref buf) = self.open_file else { return };
         self.lt_running = true;
-        match self.lt_client.check(&buf.content, &self.dictionary) {
+        match self.lt_client.check(&buf.content) {
             Ok(matches) => {
                 self.lt_results = matches;
                 self.app_error = None;
+                self.refilter();
             }
             Err(e) => {
                 self.app_error = Some(e);
@@ -210,8 +254,17 @@ impl App {
             self.app_error = Some(e);
             return;
         }
-        let dict = &self.dictionary;
-        self.lt_results.retain(|m| !dict.is_exception(&m.word(&buf.content)));
+        self.refilter();
+    }
+
+    /// Retire un mot du dictionnaire ; ses occurrences réapparaissent dans les résultats.
+    fn remove_from_dictionary(&mut self, word: &str) {
+        let Some(project) = self.current_project.as_ref() else { return };
+        if let Err(e) = self.dictionary.remove_word(word, project) {
+            self.app_error = Some(e);
+            return;
+        }
+        self.refilter();
     }
 }
 
@@ -382,6 +435,13 @@ impl eframe::App for App {
             }
         }
 
+        // Dictionnaire modifié sur disque (hors application ou par nous-mêmes)
+        if self.dict_watcher.as_mut().is_some_and(|w| w.poll()) {
+            if let Some(project) = self.current_project.clone() {
+                self.reload_dictionary(&project);
+            }
+        }
+
         // Barre de statut
         if let Some(ref err) = self.app_error.clone() {
             egui::Panel::bottom("status_bar").show(ui, |ui| {
@@ -423,6 +483,7 @@ impl eframe::App for App {
                     &self.lt_status,
                     text,
                     &mut self.lt_results,
+                    &self.dictionary.words,
                     self.selected_match,
                     self.selection_bg,
                     self.selection_fg,
@@ -431,6 +492,7 @@ impl eframe::App for App {
                 match action {
                     super::lt_panel::Action::Analyse   => self.run_analysis(),
                     super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
+                    super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
                     super::lt_panel::Action::None      => {}
                 }
             });
