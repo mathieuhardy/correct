@@ -18,7 +18,13 @@ pub enum Action {
 /// Popup modal sur une erreur : accepter une suggestion, ignorer, ajouter au dictionnaire.
 /// `backdrop_armed` : un appui a eu lieu après l'ouverture ; sinon un clic sur le fond
 /// est ignoré (c'est le clic qui a ouvert le popup, revu lors d'une passe rejouée par egui).
-pub fn show(ctx: &egui::Context, word: &str, m: &LtMatch, colors: &PopupColors, backdrop_armed: bool) -> Action {
+pub fn show(
+    ctx: &egui::Context,
+    word: &str,
+    m: &LtMatch,
+    colors: &PopupColors,
+    backdrop_armed: bool,
+) -> Action {
     let res = egui::Modal::new(egui::Id::unique("lt_popup")).show(ctx, |ui| {
         let mut action = Action::None;
         ui.set_width(320.0);
@@ -65,7 +71,11 @@ pub fn show(ctx: &egui::Context, word: &str, m: &LtMatch, colors: &PopupColors, 
 }
 
 /// Bouton dont le fond et le texte prennent `(bg, fg)` au survol / clic.
-fn hover_button(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, (bg, fg): (egui::Color32, egui::Color32)) -> egui::Response {
+fn hover_button(
+    ui: &mut egui::Ui,
+    label: impl Into<egui::WidgetText>,
+    (bg, fg): (egui::Color32, egui::Color32),
+) -> egui::Response {
     ui.scope(|ui| {
         let normal = ui.visuals().text_color();
         let v = ui.visuals_mut();
@@ -79,5 +89,6 @@ fn hover_button(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, (bg, fg):
         }
         // Pas de wrap interne : un bouton trop long passe à la ligne au lieu d'être écrasé.
         ui.add(egui::Button::new(label).wrap_mode(egui::TextWrapMode::Extend))
-    }).inner
+    })
+    .inner
 }

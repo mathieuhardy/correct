@@ -18,8 +18,12 @@ impl Default for LanguageToolConfig {
     }
 }
 
-fn default_font_size() -> f32 { 14.0 }
-fn default_line_height() -> f32 { 1.0 }
+fn default_font_size() -> f32 {
+    14.0
+}
+fn default_line_height() -> f32 {
+    1.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
@@ -77,7 +81,15 @@ impl Config {
     }
 
     fn load_from(path: &Path) -> (Self, Option<String>) {
-        let locked = |msg: String| (Config { locked: true, ..Config::default() }, Some(msg));
+        let locked = |msg: String| {
+            (
+                Config {
+                    locked: true,
+                    ..Config::default()
+                },
+                Some(msg),
+            )
+        };
         match std::fs::read_to_string(path) {
             Ok(content) => match toml::from_str(&content) {
                 Ok(config) => (config, None),
@@ -88,7 +100,10 @@ impl Config {
                 let err = config.save_to(path).err();
                 (config, err)
             }
-            Err(e) => locked(format!("Impossible de lire la config ({}) : {e}", path.display())),
+            Err(e) => locked(format!(
+                "Impossible de lire la config ({}) : {e}",
+                path.display()
+            )),
         }
     }
 
@@ -98,7 +113,10 @@ impl Config {
 
     fn save_to(&self, path: &Path) -> Result<(), String> {
         if self.locked {
-            return Err(format!("Config invalide : corrigez {} (modifications non sauvegardées)", path.display()));
+            return Err(format!(
+                "Config invalide : corrigez {} (modifications non sauvegardées)",
+                path.display()
+            ));
         }
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -123,8 +141,13 @@ mod tests {
     use super::*;
 
     fn tmp_path() -> PathBuf {
-        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        std::env::temp_dir().join(format!("correct-cfg-{}-{n}", std::process::id())).join("config.toml")
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir()
+            .join(format!("correct-cfg-{}-{n}", std::process::id()))
+            .join("config.toml")
     }
 
     #[test]
@@ -175,6 +198,9 @@ mod tests {
         let (cfg, err) = Config::load_from(&path);
         assert!(err.unwrap().contains("Config invalide"));
         assert!(cfg.save_to(&path).is_err());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "[app\nfont_size = 18");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[app\nfont_size = 18"
+        );
     }
 }

@@ -20,8 +20,8 @@ pub fn show(
     running: bool,
 ) -> Action {
     let (dot_color, dot_tip) = match status {
-        LtStatus::Connected   => (egui::Color32::from_rgb(80, 200, 120), "Connecté"),
-        LtStatus::Unreachable => (egui::Color32::from_rgb(220, 80, 80),  "Inaccessible"),
+        LtStatus::Connected => (egui::Color32::from_rgb(80, 200, 120), "Connecté"),
+        LtStatus::Unreachable => (egui::Color32::from_rgb(220, 80, 80), "Inaccessible"),
     };
 
     ui.add_space(6.0);
@@ -33,7 +33,8 @@ pub fn show(
         ui.colored_label(dot_color, "●").on_hover_text(dot_tip);
         ui.separator();
 
-        if ui.add_enabled(can_analyse, egui::Button::new("▶"))
+        if ui
+            .add_enabled(can_analyse, egui::Button::new("▶"))
             .on_hover_text("Analyser")
             .clicked()
         {
@@ -57,7 +58,11 @@ pub fn show(
             }
             for w in dictionary {
                 ui.horizontal(|ui| {
-                    if ui.small_button("✗").on_hover_text("Retirer du dictionnaire").clicked() {
+                    if ui
+                        .small_button("✗")
+                        .on_hover_text("Retirer du dictionnaire")
+                        .clicked()
+                    {
                         action = Action::RemoveWord(w.clone());
                     }
                     ui.label(w);
@@ -73,43 +78,47 @@ pub fn show(
     }
 
     // Liste collapsée : clic sur un item → le sélectionne et bascule son détail.
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.hidden()) {
-            let word = m.word(text);
-            let arrow = if m.expanded { "▾" } else { "▸" };
-            let head = match m.replacements.first() {
-                Some(r) => format!("{arrow} \"{word}\" → {r}"),
-                None    => format!("{arrow} \"{word}\""),
-            };
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.hidden()) {
+                let word = m.word(text);
+                let arrow = if m.expanded { "▾" } else { "▸" };
+                let head = match m.replacements.first() {
+                    Some(r) => format!("{arrow} \"{word}\" → {r}"),
+                    None => format!("{arrow} \"{word}\""),
+                };
 
-            let is_selected = selected == Some(i);
-            let clicked = ui.scope(|ui| {
-                if is_selected {
-                    if let Some(bg) = selection_bg {
-                        ui.visuals_mut().selection.bg_fill = bg;
-                    }
-                    if let Some(fg) = selection_fg {
-                        ui.visuals_mut().override_text_color = Some(fg);
-                    }
+                let is_selected = selected == Some(i);
+                let clicked = ui
+                    .scope(|ui| {
+                        if is_selected {
+                            if let Some(bg) = selection_bg {
+                                ui.visuals_mut().selection.bg_fill = bg;
+                            }
+                            if let Some(fg) = selection_fg {
+                                ui.visuals_mut().override_text_color = Some(fg);
+                            }
+                        }
+                        ui.selectable_label(is_selected, head).clicked()
+                    })
+                    .inner;
+
+                if clicked {
+                    m.expanded = !m.expanded;
+                    action = Action::Select(i);
                 }
-                ui.selectable_label(is_selected, head).clicked()
-            }).inner;
 
-            if clicked {
-                m.expanded = !m.expanded;
-                action = Action::Select(i);
+                if m.expanded {
+                    ui.indent(i, |ui| {
+                        ui.label(egui::RichText::new(&m.message).weak());
+                        if m.replacements.len() > 1 {
+                            ui.label(format!("Autres : {}", m.replacements[1..].join(", ")));
+                        }
+                    });
+                }
             }
-
-            if m.expanded {
-                ui.indent(i, |ui| {
-                    ui.label(egui::RichText::new(&m.message).weak());
-                    if m.replacements.len() > 1 {
-                        ui.label(format!("Autres : {}", m.replacements[1..].join(", ")));
-                    }
-                });
-            }
-        }
-    });
+        });
 
     action
 }

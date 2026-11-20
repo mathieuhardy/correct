@@ -54,24 +54,61 @@ impl App {
         let (lt_client, lt_status, lt_error) = LtClient::init(&config.languagetool);
         errors.extend(lt_error);
 
-        let accent_bg    = config.app.accent_color_bg.as_deref().and_then(parse_hex_color);
-        let accent_fg    = config.app.accent_color_fg.as_deref().and_then(parse_hex_color);
-        let selection_bg = config.app.selection_color_bg.as_deref().and_then(parse_hex_color);
-        let selection_fg = config.app.selection_color_fg.as_deref().and_then(parse_hex_color);
+        let accent_bg = config
+            .app
+            .accent_color_bg
+            .as_deref()
+            .and_then(parse_hex_color);
+        let accent_fg = config
+            .app
+            .accent_color_fg
+            .as_deref()
+            .and_then(parse_hex_color);
+        let selection_bg = config
+            .app
+            .selection_color_bg
+            .as_deref()
+            .and_then(parse_hex_color);
+        let selection_fg = config
+            .app
+            .selection_color_fg
+            .as_deref()
+            .and_then(parse_hex_color);
 
-        let color_or = |c: &Option<String>, default: egui::Color32| c.as_deref().and_then(parse_hex_color).unwrap_or(default);
+        let color_or = |c: &Option<String>, default: egui::Color32| {
+            c.as_deref().and_then(parse_hex_color).unwrap_or(default)
+        };
         let dark = egui::Color32::from_rgb(30, 30, 30);
         let popup_colors = super::popup::PopupColors {
-            accept:     (color_or(&config.app.accept_color_bg, egui::Color32::from_rgb(102, 187, 106)),
-                         color_or(&config.app.accept_color_fg, dark)),
-            ignore:     (color_or(&config.app.ignore_color_bg, egui::Color32::from_rgb(229, 115, 115)),
-                         color_or(&config.app.ignore_color_fg, dark)),
-            dictionary: (color_or(&config.app.dictionary_color_bg, egui::Color32::from_rgb(100, 181, 246)),
-                         color_or(&config.app.dictionary_color_fg, dark)),
+            accept: (
+                color_or(
+                    &config.app.accept_color_bg,
+                    egui::Color32::from_rgb(102, 187, 106),
+                ),
+                color_or(&config.app.accept_color_fg, dark),
+            ),
+            ignore: (
+                color_or(
+                    &config.app.ignore_color_bg,
+                    egui::Color32::from_rgb(229, 115, 115),
+                ),
+                color_or(&config.app.ignore_color_fg, dark),
+            ),
+            dictionary: (
+                color_or(
+                    &config.app.dictionary_color_bg,
+                    egui::Color32::from_rgb(100, 181, 246),
+                ),
+                color_or(&config.app.dictionary_color_fg, dark),
+            ),
         };
 
         // `last_project = ""` signifie « aucun projet » ; un chemin disparu est signalé.
-        let last_project = config.app.last_project.clone().filter(|p| !p.as_os_str().is_empty());
+        let last_project = config
+            .app
+            .last_project
+            .clone()
+            .filter(|p| !p.as_os_str().is_empty());
         if let Some(p) = last_project.as_ref().filter(|p| !p.is_dir()) {
             errors.push(format!("Dernier projet introuvable : {}", p.display()));
         }
@@ -144,11 +181,17 @@ impl App {
 
     /// Recalcule `in_dictionary` pour chaque résultat ; ferme le popup si son erreur disparaît.
     fn refilter(&mut self) {
-        let Some(buf) = self.open_file.as_ref() else { return };
+        let Some(buf) = self.open_file.as_ref() else {
+            return;
+        };
         for m in &mut self.lt_results {
             m.in_dictionary = self.dictionary.is_exception(&m.word(&buf.content));
         }
-        if self.selected_match.and_then(|i| self.lt_results.get(i)).is_some_and(|m| m.hidden()) {
+        if self
+            .selected_match
+            .and_then(|i| self.lt_results.get(i))
+            .is_some_and(|m| m.hidden())
+        {
             self.close_popup();
         }
     }
@@ -182,7 +225,11 @@ impl App {
                         None
                     }
                 };
-                self.open_file = Some(FileBuffer { path, content, modified: false });
+                self.open_file = Some(FileBuffer {
+                    path,
+                    content,
+                    modified: false,
+                });
             }
             Err(e) => {
                 self.app_error = Some(format!("Impossible de lire '{}' : {e}", path.display()));
@@ -193,11 +240,16 @@ impl App {
     /// Fichier ouvert modifié sur disque : recharge, vide le panneau et relance l'analyse.
     /// Nos propres écritures (suggestion acceptée) laissent un contenu identique : ignorées.
     fn reload_open_file(&mut self) {
-        let Some(buf) = self.open_file.as_mut() else { return };
+        let Some(buf) = self.open_file.as_mut() else {
+            return;
+        };
         let content = match std::fs::read_to_string(&buf.path) {
             Ok(c) => c,
             Err(e) => {
-                self.app_error = Some(format!("Impossible de relire '{}' : {e}", buf.path.display()));
+                self.app_error = Some(format!(
+                    "Impossible de relire '{}' : {e}",
+                    buf.path.display()
+                ));
                 return;
             }
         };
@@ -213,7 +265,9 @@ impl App {
     }
 
     fn run_analysis(&mut self) {
-        let Some(ref buf) = self.open_file else { return };
+        let Some(ref buf) = self.open_file else {
+            return;
+        };
         self.lt_running = true;
         match self.lt_client.check(&buf.content) {
             Ok(matches) => {
@@ -243,18 +297,28 @@ impl App {
         if !self.popup_open {
             return;
         }
-        let (Some(i), Some(buf)) = (self.selected_match, self.open_file.as_ref()) else { return };
-        let Some(m) = self.lt_results.get(i) else { return };
+        let (Some(i), Some(buf)) = (self.selected_match, self.open_file.as_ref()) else {
+            return;
+        };
+        let Some(m) = self.lt_results.get(i) else {
+            return;
+        };
 
         if ctx.input(|inp| inp.pointer.any_pressed() && inp.time > self.popup_opened_at) {
             self.popup_armed = true;
         }
 
-        match super::popup::show(ctx, &m.word(&buf.content), m, &self.popup_colors, self.popup_armed) {
-            super::popup::Action::None            => {}
-            super::popup::Action::Close           => self.close_popup(),
-            super::popup::Action::Accept(r)       => self.accept_suggestion(i, &r),
-            super::popup::Action::Ignore          => {
+        match super::popup::show(
+            ctx,
+            &m.word(&buf.content),
+            m,
+            &self.popup_colors,
+            self.popup_armed,
+        ) {
+            super::popup::Action::None => {}
+            super::popup::Action::Close => self.close_popup(),
+            super::popup::Action::Accept(r) => self.accept_suggestion(i, &r),
+            super::popup::Action::Ignore => {
                 self.lt_results[i].ignored = true;
                 self.close_popup();
             }
@@ -266,10 +330,17 @@ impl App {
     /// supprime celles qui chevauchaient la zone remplacée, puis écrit sur disque.
     fn accept_suggestion(&mut self, i: usize, replacement: &str) {
         self.close_popup();
-        let Some(buf) = self.open_file.as_mut() else { return };
+        let Some(buf) = self.open_file.as_mut() else {
+            return;
+        };
 
         let m = self.lt_results.remove(i);
-        let byte_at = |n: usize| buf.content.char_indices().nth(n).map_or(buf.content.len(), |(b, _)| b);
+        let byte_at = |n: usize| {
+            buf.content
+                .char_indices()
+                .nth(n)
+                .map_or(buf.content.len(), |(b, _)| b)
+        };
         let range = byte_at(m.offset)..byte_at(m.offset + m.length);
         buf.content.replace_range(range, replacement);
 
@@ -285,15 +356,23 @@ impl App {
         });
 
         match std::fs::write(&buf.path, &buf.content) {
-            Ok(())  => buf.modified = false,
-            Err(e)  => self.app_error = Some(format!("Impossible d'écrire '{}' : {e}", buf.path.display())),
+            Ok(()) => buf.modified = false,
+            Err(e) => {
+                self.app_error = Some(format!(
+                    "Impossible d'écrire '{}' : {e}",
+                    buf.path.display()
+                ))
+            }
         }
     }
 
     /// Ajoute le mot au dictionnaire du projet et retire toutes ses occurrences des résultats.
     fn add_to_dictionary(&mut self, i: usize) {
         self.close_popup();
-        let (Some(project), Some(buf)) = (self.current_project.as_ref(), self.open_file.as_ref()) else { return };
+        let (Some(project), Some(buf)) = (self.current_project.as_ref(), self.open_file.as_ref())
+        else {
+            return;
+        };
 
         let word = self.lt_results[i].word(&buf.content);
         if let Err(e) = self.dictionary.add_word(&word, project) {
@@ -305,7 +384,9 @@ impl App {
 
     /// Retire un mot du dictionnaire ; ses occurrences réapparaissent dans les résultats.
     fn remove_from_dictionary(&mut self, word: &str) {
-        let Some(project) = self.current_project.as_ref() else { return };
+        let Some(project) = self.current_project.as_ref() else {
+            return;
+        };
         if let Err(e) = self.dictionary.remove_word(word, project) {
             self.app_error = Some(e);
             return;
@@ -353,9 +434,15 @@ pub fn apply_font(ctx: &egui::Context, app_config: &crate::config::AppConfig) ->
         };
         match bytes {
             Ok(b) => {
-                fonts.font_data.insert("custom".to_owned(), egui::FontData::from_owned(b).into());
+                fonts
+                    .font_data
+                    .insert("custom".to_owned(), egui::FontData::from_owned(b).into());
                 for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                    fonts.families.entry(family).or_default().insert(0, "custom".to_owned());
+                    fonts
+                        .families
+                        .entry(family)
+                        .or_default()
+                        .insert(0, "custom".to_owned());
                 }
             }
             Err(e) => error = Some(e),
@@ -403,16 +490,29 @@ fn panel_header(
     let mut btn_clicked = false;
 
     egui::Frame::new()
-        .inner_margin(egui::Margin { left: 10, right: 10, top: 7, bottom: 7 })
+        .inner_margin(egui::Margin {
+            left: 10,
+            right: 10,
+            top: 7,
+            bottom: 7,
+        })
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(format!("{icon}  {title}")).strong().color(text_color));
+                ui.label(
+                    egui::RichText::new(format!("{icon}  {title}"))
+                        .strong()
+                        .color(text_color),
+                );
                 if let Some(lbl) = trailing_btn {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add(egui::Button::new(
-                            egui::RichText::new(lbl).color(text_color)
-                        ).frame(false)).clicked() {
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new(lbl).color(text_color))
+                                    .frame(false),
+                            )
+                            .clicked()
+                        {
                             btn_clicked = true;
                         }
                     });
@@ -424,7 +524,8 @@ fn panel_header(
         egui::pos2(clip.min.x, clip.min.y),
         egui::pos2(clip.max.x, ui.cursor().min.y),
     );
-    ui.painter().set(bg_slot, egui::Shape::rect_filled(full_rect, 0.0, bg));
+    ui.painter()
+        .set(bg_slot, egui::Shape::rect_filled(full_rect, 0.0, bg));
 
     ui.add_space(2.0);
     btn_clicked
@@ -525,8 +626,16 @@ impl eframe::App for App {
             let size = (self.config.app.font_size - 3.0).max(8.0);
             egui::Panel::bottom("status_bar").show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("⬤").size(size).color(egui::Color32::RED));
-                    ui.label(egui::RichText::new(err).size(size).color(egui::Color32::RED));
+                    ui.label(
+                        egui::RichText::new("⬤")
+                            .size(size)
+                            .color(egui::Color32::RED),
+                    );
+                    ui.label(
+                        egui::RichText::new(err)
+                            .size(size)
+                            .color(egui::Color32::RED),
+                    );
                 });
             });
         }
@@ -538,16 +647,17 @@ impl eframe::App for App {
             .default_size(200.0)
             .show(ui, |ui| {
                 let open_clicked = panel_header(ui, "󰙅", "Explorer", abg, afg, Some("󰉗"));
-                if open_clicked
-                    && let Some(path) = open_folder_dialog()
-                {
+                if open_clicked && let Some(path) = open_folder_dialog() {
                     self.open_project(path);
                 }
 
                 if self.current_project.is_some() {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         let open_path = self.open_file.as_ref().map(|f| f.path.as_path());
-                        if let Some(path) = self.file_tree.show(ui, open_path, self.selection_bg, self.selection_fg) {
+                        if let Some(path) =
+                            self.file_tree
+                                .show(ui, open_path, self.selection_bg, self.selection_fg)
+                        {
                             self.load_file(path);
                         }
                     });
@@ -559,7 +669,11 @@ impl eframe::App for App {
             .default_size(260.0)
             .show(ui, |ui| {
                 panel_header(ui, "󰓆", "LanguageTool", abg, afg, None);
-                let text = self.open_file.as_ref().map(|f| f.content.as_str()).unwrap_or("");
+                let text = self
+                    .open_file
+                    .as_ref()
+                    .map(|f| f.content.as_str())
+                    .unwrap_or("");
                 let action = super::lt_panel::show(
                     ui,
                     &self.lt_status,
@@ -572,10 +686,10 @@ impl eframe::App for App {
                     self.lt_running,
                 );
                 match action {
-                    super::lt_panel::Action::Analyse   => self.run_analysis(),
+                    super::lt_panel::Action::Analyse => self.run_analysis(),
                     super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
                     super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
-                    super::lt_panel::Action::None      => {}
+                    super::lt_panel::Action::None => {}
                 }
             });
 

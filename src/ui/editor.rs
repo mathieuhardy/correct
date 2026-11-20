@@ -13,7 +13,7 @@ pub fn show(
 
     let available = ui.available_width();
     let content_w = max_width.map(|mw| mw.min(available)).unwrap_or(available);
-    let top_pad   = if max_width.is_some() { 24.0 } else { 0.0 };
+    let top_pad = if max_width.is_some() { 24.0 } else { 0.0 };
 
     // Custom layouter only when line_height deviates from 1.0.
     // fonts_mut() takes a write lock — avoid calling it every frame unnecessarily.
@@ -28,18 +28,22 @@ pub fn show(
 
             let mut add_editor = |ui: &mut egui::Ui| {
                 let res = if custom_lh {
-                    let font_size  = ui.text_style_height(&egui::TextStyle::Monospace);
+                    let font_size = ui.text_style_height(&egui::TextStyle::Monospace);
                     let text_color = ui.visuals().text_color();
-                    let lh_px      = font_size * line_height;
+                    let lh_px = font_size * line_height;
                     let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap: f32| {
                         let mut job = egui::text::LayoutJob::default();
                         job.wrap.max_width = wrap;
-                        job.append(text.as_str(), 0.0, egui::TextFormat {
-                            font_id:     egui::FontId::monospace(font_size),
-                            line_height: Some(lh_px),
-                            color:       text_color,
-                            ..Default::default()
-                        });
+                        job.append(
+                            text.as_str(),
+                            0.0,
+                            egui::TextFormat {
+                                font_id: egui::FontId::monospace(font_size),
+                                line_height: Some(lh_px),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
                         ui.ctx().fonts_mut(|f| f.layout_job(job))
                     };
                     egui::TextEdit::multiline(&mut buf.content)
@@ -60,7 +64,11 @@ pub fn show(
                 paint_underlines(ui.painter(), &res.galley, res.galley_pos, matches, selected);
 
                 // TextEdit non interactif ne capte que le survol : zone cliquable superposée.
-                let click = ui.interact(res.response.rect, res.response.id.with("click"), egui::Sense::click());
+                let click = ui.interact(
+                    res.response.rect,
+                    res.response.id.with("click"),
+                    egui::Sense::click(),
+                );
                 if let Some(pos) = click.hover_pos() {
                     let hit = match_at(&res.galley, res.galley_pos, matches, pos);
                     if hit.is_some() {
@@ -103,10 +111,13 @@ fn segments(galley: &egui::Galley, m: &LtMatch) -> Vec<(egui::Rect, f32)> {
         let (a, b) = (start.max(row_start), end.min(row_start + row.glyphs.len()));
         if a < b {
             let first = &row.glyphs[a - row_start];
-            let last  = &row.glyphs[b - 1 - row_start];
+            let last = &row.glyphs[b - 1 - row_start];
             let rect = egui::Rect::from_min_max(
                 egui::pos2(row.pos.x + first.pos.x, row.pos.y),
-                egui::pos2(row.pos.x + last.pos.x + last.advance_width, row.pos.y + row.size.y),
+                egui::pos2(
+                    row.pos.x + last.pos.x + last.advance_width,
+                    row.pos.y + row.size.y,
+                ),
             );
             out.push((rect, row.pos.y + first.pos.y));
         }
@@ -116,7 +127,10 @@ fn segments(galley: &egui::Galley, m: &LtMatch) -> Vec<(egui::Rect, f32)> {
 }
 
 fn visible(matches: &[LtMatch]) -> impl Iterator<Item = (usize, &LtMatch)> {
-    matches.iter().enumerate().filter(|(_, m)| !m.hidden() && m.length > 0)
+    matches
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| !m.hidden() && m.length > 0)
 }
 
 /// Souligne en rouge chaque erreur visible ; l'erreur sélectionnée est plus épaisse.
@@ -134,7 +148,10 @@ fn paint_underlines(
         for (rect, baseline) in segments(galley, m) {
             let y = origin.y + baseline + 4.0;
             painter.line_segment(
-                [egui::pos2(origin.x + rect.min.x, y), egui::pos2(origin.x + rect.max.x, y)],
+                [
+                    egui::pos2(origin.x + rect.min.x, y),
+                    egui::pos2(origin.x + rect.max.x, y),
+                ],
                 egui::Stroke::new(width, color),
             );
         }
@@ -142,7 +159,12 @@ fn paint_underlines(
 }
 
 /// Index de l'erreur sous `pos` (coordonnées écran), s'il y en a une.
-fn match_at(galley: &egui::Galley, origin: egui::Pos2, matches: &[LtMatch], pos: egui::Pos2) -> Option<usize> {
+fn match_at(
+    galley: &egui::Galley,
+    origin: egui::Pos2,
+    matches: &[LtMatch],
+    pos: egui::Pos2,
+) -> Option<usize> {
     let rel = pos - origin.to_vec2();
     visible(matches)
         .find(|(_, m)| segments(galley, m).iter().any(|(r, _)| r.contains(rel)))

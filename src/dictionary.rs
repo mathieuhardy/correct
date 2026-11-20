@@ -20,13 +20,19 @@ impl Dictionary {
             Ok(content) => toml::from_str(&content)
                 .map_err(|e| format!("Dictionnaire invalide ({}) : {e}", path.display())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Dictionary::default()),
-            Err(e) => Err(format!("Impossible de lire le dictionnaire ({}) : {e}", path.display())),
+            Err(e) => Err(format!(
+                "Impossible de lire le dictionnaire ({}) : {e}",
+                path.display()
+            )),
         }
     }
 
     /// Dictionnaire vide en lecture seule, utilisé quand le fichier existant est invalide.
     pub fn locked() -> Self {
-        Self { words: Vec::new(), locked: true }
+        Self {
+            words: Vec::new(),
+            locked: true,
+        }
     }
 
     pub fn is_locked(&self) -> bool {
@@ -37,7 +43,10 @@ impl Dictionary {
     /// un fichier à moitié écrit.
     pub fn save(&self, project: &Path) -> Result<(), String> {
         if self.locked {
-            return Err("Dictionnaire invalide : corrigez .correct/dictionary.toml avant de le modifier".to_string());
+            return Err(
+                "Dictionnaire invalide : corrigez .correct/dictionary.toml avant de le modifier"
+                    .to_string(),
+            );
         }
         let path = Self::path(project);
         if let Some(parent) = path.parent() {
@@ -49,7 +58,12 @@ impl Dictionary {
         let tmp = path.with_extension("toml.tmp");
         std::fs::write(&tmp, content)
             .and_then(|_| std::fs::rename(&tmp, &path))
-            .map_err(|e| format!("Impossible d'écrire le dictionnaire ({}) : {e}", path.display()))
+            .map_err(|e| {
+                format!(
+                    "Impossible d'écrire le dictionnaire ({}) : {e}",
+                    path.display()
+                )
+            })
     }
 
     /// Ajoute un mot (insensible à la casse) et persiste immédiatement.
@@ -69,7 +83,11 @@ impl Dictionary {
     pub fn remove_word(&mut self, word: &str, project: &Path) -> Result<(), String> {
         let before = std::mem::take(&mut self.words);
         let lower = word.to_lowercase();
-        self.words = before.iter().filter(|w| w.to_lowercase() != lower).cloned().collect();
+        self.words = before
+            .iter()
+            .filter(|w| w.to_lowercase() != lower)
+            .cloned()
+            .collect();
         let res = self.save(project);
         if res.is_err() {
             self.words = before;
@@ -92,7 +110,10 @@ mod tests {
     use super::*;
 
     fn project() -> PathBuf {
-        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let dir = std::env::temp_dir().join(format!("correct-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -129,6 +150,9 @@ mod tests {
         let mut d = Dictionary::locked();
         assert!(d.add_word("b", &p).is_err());
         assert!(d.words.is_empty());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "words = [\"a\", oops");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "words = [\"a\", oops"
+        );
     }
 }

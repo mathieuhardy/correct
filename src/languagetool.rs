@@ -86,7 +86,12 @@ impl LtClient {
             .build()
             .unwrap_or_default();
         let reachable = Self::ping(&http, &config.url);
-        let client = |child| Self { url: config.url.clone(), language: config.language.clone(), child, http };
+        let client = |child| Self {
+            url: config.url.clone(),
+            language: config.language.clone(),
+            child,
+            http,
+        };
 
         if reachable {
             return (client(None), LtStatus::Connected, None);
@@ -106,11 +111,17 @@ impl LtClient {
                         return (client, LtStatus::Connected, None);
                     }
                 }
-                let msg = format!("{unreachable} : '{}' lancé mais ne répond pas après 5 s", binary.display());
+                let msg = format!(
+                    "{unreachable} : '{}' lancé mais ne répond pas après 5 s",
+                    binary.display()
+                );
                 (client, LtStatus::Unreachable, Some(msg))
             }
             Err(e) => {
-                let msg = format!("{unreachable} : impossible de lancer '{}' : {e}", binary.display());
+                let msg = format!(
+                    "{unreachable} : impossible de lancer '{}' : {e}",
+                    binary.display()
+                );
                 (client(None), LtStatus::Unreachable, Some(msg))
             }
         }
@@ -128,7 +139,10 @@ impl LtClient {
             .map_err(|e| format!("Erreur réseau LanguageTool : {e}"))?;
 
         if !resp.status().is_success() {
-            return Err(format!("LanguageTool a répondu avec le code {}", resp.status()));
+            return Err(format!(
+                "LanguageTool a répondu avec le code {}",
+                resp.status()
+            ));
         }
 
         let body = resp
@@ -140,8 +154,8 @@ impl LtClient {
 
 /// Parse le JSON de `/v2/check` pour le texte analysé `text`.
 fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
-    let lt_resp: LtResponse = serde_json::from_str(body)
-        .map_err(|e| format!("Réponse LanguageTool invalide : {e}"))?;
+    let lt_resp: LtResponse =
+        serde_json::from_str(body).map_err(|e| format!("Réponse LanguageTool invalide : {e}"))?;
 
     let starts = utf16_starts(text);
 
@@ -179,7 +193,7 @@ fn utf16_starts(text: &str) -> Vec<usize> {
 /// Convertit une plage (offset, longueur) en unités UTF-16 en plage en caractères.
 fn utf16_to_char_range(starts: &[usize], offset: usize, length: usize) -> (usize, usize) {
     let start = starts.partition_point(|&u| u < offset);
-    let end   = starts.partition_point(|&u| u < offset + length);
+    let end = starts.partition_point(|&u| u < offset + length);
     (start, end.saturating_sub(start))
 }
 
@@ -210,8 +224,14 @@ mod tests {
         let (off, len) = utf16_to_char_range(&starts, 9, 4);
         assert_eq!((off, len), (8, 4));
         let m = LtMatch {
-            offset: off, length: len, message: String::new(),
-            replacements: vec![], expanded: false, ignored: false, misspelling: true, in_dictionary: false,
+            offset: off,
+            length: len,
+            message: String::new(),
+            replacements: vec![],
+            expanded: false,
+            ignored: false,
+            misspelling: true,
+            in_dictionary: false,
         };
         assert_eq!(m.word(text), "tres");
     }
@@ -276,8 +296,16 @@ mod tests {
 
     #[test]
     fn parse_response_empty_and_invalid() {
-        assert!(parse_matches("ok", r#"{"matches": []}"#).unwrap().is_empty());
-        assert!(parse_matches("ok", "<html>502 Bad Gateway</html>").unwrap_err().contains("invalide"));
+        assert!(
+            parse_matches("ok", r#"{"matches": []}"#)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            parse_matches("ok", "<html>502 Bad Gateway</html>")
+                .unwrap_err()
+                .contains("invalide")
+        );
         assert!(parse_matches("ok", r#"{"software": {}}"#).is_err());
     }
 

@@ -8,7 +8,9 @@ fn is_change(ev: &Event) -> bool {
     !matches!(ev.kind, EventKind::Access(_))
 }
 
-fn channel_watcher(ctx: egui::Context) -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>), String> {
+fn channel_watcher(
+    ctx: egui::Context,
+) -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>), String> {
     let (tx, rx) = channel();
     let watcher = notify::recommended_watcher(move |res| {
         let _ = tx.send(res);
@@ -35,7 +37,11 @@ impl FileWatcher {
         watcher
             .watch(dir, RecursiveMode::NonRecursive)
             .map_err(|e| format!("Watch de '{}' impossible : {e}", path.display()))?;
-        Ok(Self { _watcher: watcher, rx, path: path.to_path_buf() })
+        Ok(Self {
+            _watcher: watcher,
+            rx,
+            path: path.to_path_buf(),
+        })
     }
 
     /// Vide les événements reçus ; true si le fichier a pu changer depuis le dernier appel.
@@ -70,14 +76,22 @@ impl DictWatcher {
             .watch(project, RecursiveMode::NonRecursive)
             .map_err(|e| format!("Watch du dictionnaire impossible : {e}"))?;
 
-        let mut w = Self { watcher, rx, dir: project.join(".correct"), dir_watched: false };
+        let mut w = Self {
+            watcher,
+            rx,
+            dir: project.join(".correct"),
+            dir_watched: false,
+        };
         w.watch_dir();
         Ok(w)
     }
 
     fn watch_dir(&mut self) {
         if !self.dir_watched && self.dir.is_dir() {
-            self.dir_watched = self.watcher.watch(&self.dir, RecursiveMode::NonRecursive).is_ok();
+            self.dir_watched = self
+                .watcher
+                .watch(&self.dir, RecursiveMode::NonRecursive)
+                .is_ok();
         }
     }
 
@@ -118,8 +132,12 @@ mod tests {
 
     #[test]
     fn detects_creation_then_external_edit() {
-        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let project = std::env::temp_dir().join(format!("correct-watch-{}-{n}", std::process::id()));
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project =
+            std::env::temp_dir().join(format!("correct-watch-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&project).unwrap();
 
         let mut w = DictWatcher::new(&project, egui::Context::default()).unwrap();
@@ -150,7 +168,10 @@ mod tests {
 
     #[test]
     fn file_watcher_sees_edit_and_replace_but_not_reads() {
-        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let dir = std::env::temp_dir().join(format!("correct-fwatch-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("notes.md");

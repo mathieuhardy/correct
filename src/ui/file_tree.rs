@@ -17,7 +17,9 @@ impl FileTree {
     }
 
     pub fn load(root: &Path) -> Self {
-        Self { nodes: build_children(root) }
+        Self {
+            nodes: build_children(root),
+        }
     }
 
     /// Affiche l'arbre et retourne le chemin du fichier cliqué, le cas échéant.
@@ -39,7 +41,9 @@ impl FileTree {
 }
 
 fn build_children(dir: &Path) -> Vec<TreeNode> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
     let mut nodes: Vec<TreeNode> = entries
         .flatten()
         .filter_map(|e| {
@@ -49,8 +53,17 @@ fn build_children(dir: &Path) -> Vec<TreeNode> {
                 return None;
             }
             let is_dir = path.is_dir();
-            let children = if is_dir { build_children(&path) } else { vec![] };
-            Some(TreeNode { name, path, is_dir, children })
+            let children = if is_dir {
+                build_children(&path)
+            } else {
+                vec![]
+            };
+            Some(TreeNode {
+                name,
+                path,
+                is_dir,
+                children,
+            })
         })
         .collect();
     // Dossiers en premier, puis fichiers, alphabétiquement dans chaque groupe.
@@ -79,17 +92,23 @@ fn show_node(
         clicked
     } else {
         let selected = open_path.map(|p| p == node.path).unwrap_or(false);
-        let clicked = ui.scope(|ui| {
-            if selected {
-                if let Some(bg) = selection_bg {
-                    ui.visuals_mut().selection.bg_fill = bg;
+        let clicked = ui
+            .scope(|ui| {
+                if selected {
+                    if let Some(bg) = selection_bg {
+                        ui.visuals_mut().selection.bg_fill = bg;
+                    }
+                    if let Some(fg) = selection_fg {
+                        ui.visuals_mut().override_text_color = Some(fg);
+                    }
                 }
-                if let Some(fg) = selection_fg {
-                    ui.visuals_mut().override_text_color = Some(fg);
-                }
-            }
-            ui.selectable_label(selected, &node.name).clicked()
-        }).inner;
-        if clicked { Some(node.path.clone()) } else { None }
+                ui.selectable_label(selected, &node.name).clicked()
+            })
+            .inner;
+        if clicked {
+            Some(node.path.clone())
+        } else {
+            None
+        }
     }
 }
