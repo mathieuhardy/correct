@@ -28,6 +28,7 @@
         nativeBuildInputs = [
           pkgs.pkg-config
           pkgs.copyDesktopItems
+          pkgs.makeWrapper
         ];
 
         buildInputs = [
@@ -54,6 +55,15 @@
             terminal = false;
           })
         ];
+
+        postInstall = ''
+          wrapProgram $out/bin/correct \
+            --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [
+              pkgs.wayland
+              pkgs.libGL
+              pkgs.libxkbcommon
+            ]}
+        '';
 
         doCheck = false;
         meta.mainProgram = "correct";
