@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// `#[serde(default)]` : toute clé absente prend la valeur de `Default`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LanguageToolConfig {
     pub binary: Option<PathBuf>,
     pub url: String,
@@ -18,23 +20,17 @@ impl Default for LanguageToolConfig {
     }
 }
 
-fn default_font_size() -> f32 {
-    14.0
-}
-fn default_line_height() -> f32 {
-    1.0
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// `#[serde(default)]` : toute clé absente prend la valeur de `Default` (impl manuelle,
+/// car un `Default` dérivé donnerait `font_size = 0` et ferait paniquer epaint).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub last_project: Option<PathBuf>,
     /// Taille de la police en points (défaut : 14.0).
-    #[serde(default = "default_font_size")]
     pub font_size: f32,
     /// Chemin vers un fichier .ttf/.otf à utiliser comme police principale (optionnel).
     pub font_family: Option<String>,
     /// Multiplicateur d'interligne dans l'éditeur (1.0 = défaut, 1.5 = 150 %).
-    #[serde(default = "default_line_height")]
     pub line_height: f32,
     /// Largeur max du texte en pixels pour le mode centré (optionnel).
     pub editor_max_width: Option<f32>,
@@ -59,6 +55,30 @@ pub struct AppConfig {
     /// Survol du bouton « Ajouter au dictionnaire » dans le popup (optionnel).
     pub dictionary_color_bg: Option<String>,
     pub dictionary_color_fg: Option<String>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            last_project: None,
+            font_size: 14.0,
+            font_family: None,
+            line_height: 1.0,
+            editor_max_width: None,
+            accent_color_bg: None,
+            accent_color_fg: None,
+            app_color_bg: None,
+            app_color_fg: None,
+            selection_color_bg: None,
+            selection_color_fg: None,
+            accept_color_bg: None,
+            accept_color_fg: None,
+            ignore_color_bg: None,
+            ignore_color_fg: None,
+            dictionary_color_bg: None,
+            dictionary_color_fg: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -91,8 +111,11 @@ impl Config {
             )
         };
         match std::fs::read_to_string(path) {
-            Ok(content) => match toml::from_str(&content) {
-                Ok(config) => (config, None),
+            Ok(content) => match toml::from_str::<Config>(&content) {
+                Ok(mut config) => {
+                    let err = config.sanitize();
+                    (config, err)
+                }
                 Err(e) => locked(format!("Config invalide ({}) : {e}", path.display())),
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -105,6 +128,28 @@ impl Config {
                 path.display()
             )),
         }
+    }
+
+    /// Remplace par leur défaut les valeurs numériques inutilisables (une taille de police
+    /// nulle fait paniquer epaint) et retourne le message d'erreur correspondant.
+    fn sanitize(&mut self) -> Option<String> {
+        let default = AppConfig::default();
+        let mut errors = Vec::new();
+        if self.app.font_size <= 0.0 || !self.app.font_size.is_finite() {
+            errors.push(format!(
+                "font_size invalide ({}), {} utilisé",
+                self.app.font_size, default.font_size
+            ));
+            self.app.font_size = default.font_size;
+        }
+        if self.app.line_height <= 0.0 || !self.app.line_height.is_finite() {
+            errors.push(format!(
+                "line_height invalide ({}), {} utilisé",
+                self.app.line_height, default.line_height
+            ));
+            self.app.line_height = default.line_height;
+        }
+        (!errors.is_empty()).then(|| errors.join("  •  "))
     }
 
     pub fn save(&self) -> Result<(), String> {
@@ -148,6 +193,52 @@ mod tests {
         std::env::temp_dir()
             .join(format!("correct-cfg-{}-{n}", std::process::id()))
             .join("config.toml")
+    }
+
+    /// Bug : sans fichier, `font_size` valait 0 (Default dérivé) → panic epaint au démarrage.
+    #[test]
+    fn missing_file_defaults_are_usable() {
+        let path = tmp_path();
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.app.font_size, 14.0);
+        assert_eq!(cfg.app.line_height, 1.0);
+        // Et le fichier créé se relit avec les mêmes valeurs.
+        let (back, _) = Config::load_from(&path);
+        assert_eq!(back.app.font_size, 14.0);
+        assert_eq!(back.app.line_height, 1.0);
+    }
+
+    #[test]
+    fn zero_or_negative_sizes_are_reported_and_replaced() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[app]\nfont_size = 0\nline_height = -1\n").unwrap();
+
+        let (cfg, err) = Config::load_from(&path);
+        let err = err.unwrap();
+        assert!(
+            err.contains("font_size") && err.contains("line_height"),
+            "{err}"
+        );
+        assert_eq!(cfg.app.font_size, 14.0);
+        assert_eq!(cfg.app.line_height, 1.0);
+    }
+
+    /// Clés ou sections manquantes : valeurs par défaut, pas d'erreur.
+    #[test]
+    fn missing_keys_and_sections_use_defaults() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+        for content in ["", "[languagetool]\nurl = \"http://x:1\"\n", "[app]\n"] {
+            std::fs::write(&path, content).unwrap();
+            let (cfg, err) = Config::load_from(&path);
+            assert!(err.is_none(), "{content:?} : {err:?}");
+            assert_eq!(cfg.app.font_size, 14.0, "{content:?}");
+            assert_eq!(cfg.app.line_height, 1.0, "{content:?}");
+            assert_eq!(cfg.languagetool.language, "auto", "{content:?}");
+        }
     }
 
     #[test]

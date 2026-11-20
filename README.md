@@ -212,7 +212,7 @@ src/
 - [x] Tests unitaires (config, dictionnaire, parsing réponse LT)
 
 ### Bugs trouvés
-- [ ] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
+- [x] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
 - [ ] Police pixelisée
 
 ### Commandes
