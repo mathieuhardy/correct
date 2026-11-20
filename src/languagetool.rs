@@ -146,33 +146,38 @@ impl LtClient {
             return Err(format!("LanguageTool a répondu avec le code {}", resp.status()));
         }
 
-        let lt_resp: LtResponse = resp
-            .json()
-            .map_err(|e| format!("Réponse LanguageTool invalide : {e}"))?;
-
-        let starts = utf16_starts(text);
-
-        let matches = lt_resp
-            .matches
-            .into_iter()
-            .map(|m| {
-                let (offset, length) = utf16_to_char_range(&starts, m.offset, m.length);
-                LtMatch {
-                    offset,
-                    length,
-                    message: m.message,
-                    misspelling: m.rule.issue_type == "misspelling",
-                    rule_id: m.rule.id,
-                    replacements: m.replacements.into_iter().map(|r| r.value).collect(),
-                    expanded: false,
-                    ignored: false,
-                    in_dictionary: false,
-                }
-            })
-            .collect();
-
-        Ok(matches)
+        let body = resp
+            .text()
+            .map_err(|e| format!("Réponse LanguageTool illisible : {e}"))?;
+        parse_matches(text, &body)
     }
+}
+
+/// Parse le JSON de `/v2/check` pour le texte analysé `text`.
+fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
+    let lt_resp: LtResponse = serde_json::from_str(body)
+        .map_err(|e| format!("Réponse LanguageTool invalide : {e}"))?;
+
+    let starts = utf16_starts(text);
+
+    Ok(lt_resp
+        .matches
+        .into_iter()
+        .map(|m| {
+            let (offset, length) = utf16_to_char_range(&starts, m.offset, m.length);
+            LtMatch {
+                offset,
+                length,
+                message: m.message,
+                misspelling: m.rule.issue_type == "misspelling",
+                rule_id: m.rule.id,
+                replacements: m.replacements.into_iter().map(|r| r.value).collect(),
+                expanded: false,
+                ignored: false,
+                in_dictionary: false,
+            }
+        })
+        .collect())
 }
 
 /// Offset UTF-16 du début de chaque caractère, plus la longueur totale en dernier élément.
@@ -225,6 +230,72 @@ mod tests {
             replacements: vec![], expanded: false, ignored: false, misspelling: true, in_dictionary: false,
         };
         assert_eq!(m.word(text), "tres");
+    }
+
+    /// Réponse `/v2/check` au format de LanguageTool (champs annexes inclus, ignorés au parsing).
+    /// Texte : "😀 C'est tres bien. les chat sont la." — offsets en UTF-16 (😀 = 2 unités).
+    const RESPONSE: &str = r#"{
+        "software": {"name": "LanguageTool", "version": "6.6", "apiVersion": 1},
+        "language": {"name": "French", "code": "fr", "detectedLanguage": {"name": "French", "code": "fr-FR"}},
+        "matches": [
+            {
+                "message": "Faute de frappe possible trouvée.",
+                "shortMessage": "Faute de frappe",
+                "replacements": [{"value": "très"}, {"value": "trees"}, {"value": "tes"}],
+                "offset": 9, "length": 4,
+                "context": {"text": "😀 C'est tres bien. les chat sont la.", "offset": 9, "length": 4},
+                "sentence": "😀 C'est tres bien.",
+                "rule": {
+                    "id": "FR_SPELLING_RULE", "description": "Faute de frappe possible",
+                    "issueType": "misspelling",
+                    "category": {"id": "TYPOS", "name": "Faute de frappe possible"}
+                }
+            },
+            {
+                "message": "Accord de nombre erroné.",
+                "replacements": [{"value": "les chats"}],
+                "offset": 20, "length": 8,
+                "rule": {
+                    "id": "D_N", "description": "Accord déterminant-nom",
+                    "issueType": "uncategorized",
+                    "category": {"id": "AGREEMENT", "name": "Accords"}
+                }
+            },
+            {
+                "message": "Confusion possible.",
+                "offset": 34, "length": 2,
+                "rule": {"id": "LA_LA", "category": {"id": "CAT_GRAMMAIRE", "name": "Grammaire"}}
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn parse_response_fields() {
+        let text = "😀 C'est tres bien. les chat sont la.";
+        let m = parse_matches(text, RESPONSE).unwrap();
+        assert_eq!(m.len(), 3);
+
+        assert_eq!(m[0].word(text), "tres");
+        assert_eq!(m[0].rule_id, "FR_SPELLING_RULE");
+        assert_eq!(m[0].message, "Faute de frappe possible trouvée.");
+        assert_eq!(m[0].replacements, vec!["très", "trees", "tes"]);
+        assert!(m[0].misspelling);
+        assert!(!m[0].hidden());
+
+        assert_eq!(m[1].word(text), "les chat");
+        assert!(!m[1].misspelling);
+
+        // Sans `replacements` ni `issueType` : valeurs par défaut.
+        assert_eq!(m[2].word(text), "la");
+        assert!(m[2].replacements.is_empty());
+        assert!(!m[2].misspelling);
+    }
+
+    #[test]
+    fn parse_response_empty_and_invalid() {
+        assert!(parse_matches("ok", r#"{"matches": []}"#).unwrap().is_empty());
+        assert!(parse_matches("ok", "<html>502 Bad Gateway</html>").unwrap_err().contains("invalide"));
+        assert!(parse_matches("ok", r#"{"software": {}}"#).is_err());
     }
 
     #[test]

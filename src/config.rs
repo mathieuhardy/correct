@@ -137,6 +137,36 @@ mod tests {
     }
 
     #[test]
+    fn partial_file_uses_defaults_for_missing_keys() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[app]\naccent_color_bg = \"#5277C3\"\n").unwrap();
+
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.app.accent_color_bg.as_deref(), Some("#5277C3"));
+        assert_eq!(cfg.app.font_size, 14.0);
+        assert_eq!(cfg.app.line_height, 1.0);
+        assert_eq!(cfg.languagetool.language, "auto");
+    }
+
+    #[test]
+    fn save_then_load_roundtrip() {
+        let path = tmp_path();
+        let (mut cfg, _) = Config::load_from(&path);
+        cfg.app.last_project = Some(PathBuf::from("/tmp/projet"));
+        cfg.app.font_size = 16.0;
+        cfg.languagetool.binary = Some(PathBuf::from("languagetool-http-server"));
+        cfg.save_to(&path).unwrap();
+
+        let (back, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(back.app.last_project, cfg.app.last_project);
+        assert_eq!(back.app.font_size, 16.0);
+        assert_eq!(back.languagetool.binary, cfg.languagetool.binary);
+    }
+
+    #[test]
     fn invalid_file_is_reported_and_never_overwritten() {
         let path = tmp_path();
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();

@@ -209,7 +209,7 @@ src/
 - [x] Libération propre du watcher au switch/fermeture de fichier (drop)
 - [x] Barre de statut en bas : icône rouge + message pour toute erreur applicative
 - [x] Réouverture du dernier projet au démarrage
-- [ ] Tests unitaires (config, dictionnaire, parsing réponse LT)
+- [x] Tests unitaires (config, dictionnaire, parsing réponse LT)
 
 ### Bugs trouvés
 - [ ] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
