@@ -162,7 +162,7 @@ pub fn show(
         .show(ui, |ui| {
             for (i, m) in matches.iter_mut().enumerate().filter(|(_, m)| !m.hidden()) {
                 let word = m.word(text);
-                let arrow = if m.expanded { "▾" } else { "▸" };
+                let arrow = if m.expanded { "▼" } else { "▶" };
                 let head = match m.replacements.first() {
                     Some(r) => format!("{arrow} \"{word}\" → {r}"),
                     None => format!("{arrow} \"{word}\""),
