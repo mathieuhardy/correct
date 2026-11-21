@@ -222,6 +222,41 @@ src/
 - [x] Rechargement si `ignored.toml` est modifié hors de l'application ; entrées des fichiers disparus retirées à l'ouverture du projet
 - [x] Tests : empreinte qui survit à un déplacement / re-wrap, purge limitée au fichier analysé, fichiers disparus, liste vide → fichier supprimé, fichier invalide jamais écrasé
 
+### Phase 7 — Config multi-analyseur
+
+- [ ] Section `[grammalecte]` dans `config.rs` : `GrammalecteConfig { binary, url }`
+- [ ] Enum `Analyzer { LanguageTool, Grammalecte }` sérialisé `"languagetool"` / `"grammalecte"`
+- [ ] Champ `default_analyzer: Analyzer` dans `AppConfig` (défaut : `languagetool`)
+- [ ] Mise à jour des configs d'exemple (`data/ubuntu_config.toml`, `data/nixos_config.toml`)
+- [ ] Tests : round-trip TOML, valeurs par défaut, enum inconnu → erreur lisible
+
+### Phase 8 — Client Grammalecte
+
+- [ ] `src/grammalecte.rs` : `GcClient` + `GcChecker` (même pattern que `languagetool.rs`)
+- [ ] Health check : `GET /get_options/fr` → 200 si opérationnel (spawn binaire si configuré, même logique que LT)
+- [ ] `POST /gc_text/fr` (form-encoded : `text`, `options` JSON)
+- [ ] Parser la réponse : fusionner `lGrammarErrors` + `lSpellingErrors` → `Vec<LtMatch>`
+- [ ] Offsets `nStart`/`nEnd` char-based (pas de conversion UTF-16, simplification vs LT)
+- [ ] `nEnd` exclusif → `length = nEnd - nStart`
+- [ ] `sentence` absent dans la réponse → reconstitué depuis `sParagraph`
+- [ ] `lSpellingErrors` → `misspelling = true`
+- [ ] Tests unitaires : parsing JSON, cas emoji, spelling vs grammaire
+
+### Phase 9 — Toggle UI et orchestration
+
+- [ ] Toggle dans l'en-tête du panneau droit : `[LT] [Gc]` (radio-style)
+- [ ] `AppState::active_analyzer: Analyzer` initialisé depuis `default_analyzer`
+- [ ] Statut `●` indépendant pour chaque analyseur (LT peut être rouge pendant que GC est vert)
+- [ ] Switch d'analyseur relance l'analyse du fichier ouvert
+
+### Phase 10 — Options Grammalecte dans la config
+
+- [ ] `[grammalecte.options]` : `HashMap<String, bool>` → passé en JSON dans les requêtes
+- [ ] Valeurs par défaut sensées (voir analyse des options ci-dessous)
+- [ ] Optionnel : panneau d'options dans l'UI
+
+---
+
 ### Bugs trouvés
 - [x] Crash de l'application au démarrage s'il n'y a pas de fichier de config ou bien s'il manque des clés dedans
 - [x] Police pixelisée (lissage via `font_gamma`, hinting via `font_hinting`)
@@ -231,3 +266,160 @@ src/
 ```shell
 docker run --rm -p 8010:8010 erikvl87/languagetool
 ```
+
+```shell
+# Grammalecte (après installation du paquet CLI & Serveur)
+python3 grammalecte-server.py -p 8080
+```
+
+---
+
+## Analyse de faisabilité — Intégration de Grammalecte
+
+### Architecture cible
+
+Le principe reste identique à l'intégration LanguageTool : un module dédié expose un `Checker` clonable et `Send`, l'application le lance en arrière-plan et reçoit un `Vec<LtMatch>` (structure réutilisée telle quelle).
+
+```
+src/
+  languagetool.rs    # client existant (inchangé)
+  grammalecte.rs     # nouveau client, même pattern
+  ui/
+    app.rs           # AppState::active_analyzer: Analyzer
+    lt_panel.rs      # toggle LT / Gc dans l'en-tête
+```
+
+**Enum d'orchestration** dans `app.rs` :
+
+```rust
+enum Analyzer {
+    LanguageTool(LtChecker),
+    Grammalecte(GcChecker),
+}
+```
+
+Le `GcChecker` convertit la réponse Grammalecte en `Vec<LtMatch>` : les listes `lGrammarErrors` et `lSpellingErrors` sont fusionnées, les suggestions `aSuggestions: Vec<String>` correspondent directement aux `replacements`, et `sentence` est reconstitué depuis `sParagraph`.
+
+### Config TOML cible
+
+```toml
+[languagetool]
+binary   = "/opt/languagetool/languagetool-server"  # optionnel
+url      = "http://localhost:8081"
+language = "auto"
+
+[grammalecte]
+binary   = "python3 grammalecte-server.py"  # optionnel
+url      = "http://localhost:8080"
+
+[grammalecte.options]
+# Toutes les options sont optionnelles ; absentes = défaut Grammalecte.
+# Voir la section "Analyse des options" ci-dessous.
+redon2 = true   # répétitions intra-phrase (désactivé par défaut dans GC)
+md     = true   # ignorer la syntaxe Markdown
+
+[app]
+default_analyzer = "languagetool"   # ou "grammalecte"
+```
+
+### API Grammalecte vs LanguageTool
+
+| Aspect | LanguageTool | Grammalecte |
+|---|---|---|
+| Endpoint analyse | `POST /v2/check` | `POST /gc_text/fr` |
+| Paramètre langue | `language=fr` (form) | Encodé dans l'URL (`/fr`) |
+| Paramètre options | `enabledRules`, `disabledRules` | `options` (JSON string) |
+| Offsets | UTF-16 (conversion nécessaire) | Position de caractère Unicode direct |
+| Borne de fin | `offset + length` | `nEnd` exclusif |
+| Structure réponse | `matches[]` plat | `data[].lGrammarErrors` + `lSpellingErrors` |
+| Suggestions | `replacements[].value` | `aSuggestions[]` (strings directs) |
+| Champ `sentence` | Fourni | Absent → reconstituer depuis `sParagraph` |
+| Health check | `GET /v2/languages` | `GET /get_options/fr` |
+| Multilangue | Oui | Non (FR uniquement) |
+| Runtime | Java / JVM | Python 3 |
+
+**Point d'attention principal** : l'absence de `sentence` dans la réponse Grammalecte affecte le fingerprinting de `ignored.toml`. La solution retenue : utiliser `sParagraph` (fourni dans la réponse) pour reconstruire une phrase approximative par extraction autour de `nStart`/`nEnd`.
+
+---
+
+## Ce que Grammalecte apporte en plus de LanguageTool
+
+1. **Typographie française de référence** — Les règles `apos` (apostrophe courbe), `nbsp` (espace insécable avant `?!;:«`), `typo` (guillemets `«»`, tirets cadratins) et `eleu` (élisions) sont le cœur de Grammalecte. LanguageTool les couvre partiellement ; Grammalecte est l'outil de référence pour la typographie française.
+
+2. **Validité des dates** (`date`) — Détecte le 31 février, le 29 février hors année bissextile, les incohérences jour/mois. LanguageTool ne fait pas ce contrôle.
+
+3. **Écriture épicène** (`eepi`) — Propose des formulations neutres ("les auteurs et autrices", "les élèves" plutôt que "les élèves et les élèves") pour les documents inclusifs. Absent dans LanguageTool.
+
+4. **Pléonasmes exhaustifs** (`pleo`) — "Monter en haut", "prévoir à l'avance", "reculer en arrière". LanguageTool en détecte quelques-uns ; Grammalecte a une liste plus fournie pour le français.
+
+5. **Répétitions** (`redon1`, `redon2`) — Détection des répétitions lexicales dans la même phrase (`redon2`) ou dans le même paragraphe (`redon1`). Non disponible dans LanguageTool pour le français.
+
+6. **Endpoint `/format_text/fr`** — Applique directement les corrections typographiques au texte (apostrophes, espaces, guillemets) sans passer par des suggestions. Ouvre la voie à un mode "auto-correct typographique" en un clic.
+
+7. **Options granulaires par requête** — Chaque règle peut être activée ou désactivée individuellement dans le champ `options` de chaque requête HTTP. LanguageTool utilise des listes `enabledRules`/`disabledRules` moins lisibles.
+
+8. **Empreinte légère** — Python 3 contre une JVM ; démarrage plus rapide, consommation mémoire réduite pour un usage desktop.
+
+---
+
+## Analyse des options Grammalecte
+
+Les options marquées `[!]` dans Grammalecte sont expérimentales ou à fort taux de faux positifs ; elles sont désactivées par défaut.
+
+### Options essentielles (activées par défaut — à conserver)
+
+| Option | Description | Pourquoi conserver |
+|---|---|---|
+| `apos` | Apostrophe typographique | Fondamental pour le français écrit |
+| `conf` | Confusions et faux-amis (a/à, ou/où…) | Très fréquent, peu de faux positifs |
+| `conj` | Conjugaisons | Essentiel |
+| `eleu` | Élisions et euphonies | "le heure" → "l'heure", fondamental |
+| `esp` | Espaces surnuméraires | Utile, peu de faux positifs |
+| `gn` | Accords genre et nombre | Essentiel |
+| `imp` | Impératif | Utile |
+| `infi` | Infinitif | Utile |
+| `inte` | Interrogatif | Utile |
+| `loc` | Locutions | Utile |
+| `maj` | Majuscules | Utile |
+| `nbsp` | Espaces insécables | Fondamental pour typographie FR |
+| `nf` | Normes françaises | Utile pour écriture formelle |
+| `num` | Nombres | Utile |
+| `pleo` | Pléonasmes | Intéressant, peu bruyant |
+| `ppas` | Participes passés, adjectifs | Essentiel |
+| `tu` | Traits d'union et soudures | Important |
+| `typo` | Signes typographiques | Fondamental |
+| `unit` | Espaces avant unités de mesure | Utile |
+| `virg` | Virgules | Essentiel |
+| `vmode` | Modes verbaux | Essentiel |
+
+### Options à activer (actuellement désactivées par défaut)
+
+| Option | Recommandation | Justification |
+|---|---|---|
+| `redon2` | **Activer** | Les répétitions dans la même phrase sont rarement intentionnelles ; peu de faux positifs |
+| `md` | **Activer dans `correct`** | L'application édite du Markdown ; sans ce flag, la syntaxe `**`, `#`, `[]()` génère du bruit |
+
+### Options situationnelles (désactivées par défaut, à exposer dans la config)
+
+| Option | Quand activer |
+|---|---|
+| `eepi` | Documents officiels, communication RH, administration — irritant pour notes personnelles ou fiction |
+| `redon1` | Textes formels — les répétitions paragraphe peuvent être stylistiques |
+| `poncfin` | Écriture formelle (rapports, emails) — bruyant pour prise de notes fragmentée |
+| `html` | Si le projet contient des fichiers `.html` |
+| `latex` | Si le projet contient des fichiers `.tex` |
+| `liga` | Documents typographiques soignés (ligatures fi, fl…) |
+
+### Options à laisser désactivées
+
+| Option | Raison |
+|---|---|
+| `idrule` | Affiche l'ID de règle dans le message — debug uniquement |
+| `mapos` `[!]` | Faux positifs fréquents sur abréviations et sigles |
+| `mc` `[!]` | Règles sur mots composés incomplètes, très bruyant |
+| `neg` `[!]` | Négation partielle — trop de faux positifs sur style familier ou dialogues |
+| `ocr` `[!]` | Uniquement pour textes numérisés (OCR) |
+| `chim` | Chimie — trop spécifique, inutile pour l'usage général |
+| `minis` | Majuscules des noms de ministères — très spécifique aux documents officiels français |
+| `bs` | "Populaire" (expressions familières) — utile en relecture formelle, gênant pour notes ou fiction |
+| `tab` | Tabulations — peu utile en Markdown (les tabulations ont un sens syntaxique) |
