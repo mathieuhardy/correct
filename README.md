@@ -224,11 +224,11 @@ src/
 
 ### Phase 7 — Config multi-analyseur
 
-- [ ] Section `[grammalecte]` dans `config.rs` : `GrammalecteConfig { binary, url }`
-- [ ] Enum `Analyzer { LanguageTool, Grammalecte }` sérialisé `"languagetool"` / `"grammalecte"`
-- [ ] Champ `default_analyzer: Analyzer` dans `AppConfig` (défaut : `languagetool`)
-- [ ] Mise à jour des configs d'exemple (`data/ubuntu_config.toml`, `data/nixos_config.toml`)
-- [ ] Tests : round-trip TOML, valeurs par défaut, enum inconnu → erreur lisible
+- [x] Section `[grammalecte]` dans `config.rs` : `GrammalecteConfig { binary, url }`
+- [x] Enum `Analyzer { LanguageTool, Grammalecte }` sérialisé `"languagetool"` / `"grammalecte"`
+- [x] Champ `default_analyzer: Analyzer` dans `AppConfig` (défaut : `languagetool`)
+- [x] Mise à jour des configs d'exemple (`data/ubuntu_config.toml`, `data/nixos_config.toml`)
+- [x] Tests : round-trip TOML, valeurs par défaut, enum inconnu → erreur lisible
 
 ### Phase 8 — Client Grammalecte
 
