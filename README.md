@@ -251,9 +251,9 @@ src/
 
 ### Phase 10 — Options Grammalecte dans la config
 
-- [ ] `[grammalecte.options]` : `HashMap<String, bool>` → passé en JSON dans les requêtes
-- [ ] Valeurs par défaut sensées (voir analyse des options ci-dessous)
-- [ ] Optionnel : panneau d'options dans l'UI
+- [x] `[grammalecte.options]` : `HashMap<String, bool>` → passé en JSON dans les requêtes
+- [x] Valeurs par défaut sensées (voir analyse des options ci-dessous)
+- [x] Optionnel : panneau d'options dans l'UI
 
 ---
 
