@@ -31,6 +31,7 @@ pub struct App {
     /// Analyse LT en cours sur un thread (None = aucune).
     analysis: Option<PendingAnalysis>,
     pub selected_match: Option<usize>,
+    pub scroll_to_selected: bool,
     pub gc_options: HashMap<String, bool>,
     pub gc_options_open: bool,
     pub popup_open: bool,
@@ -155,6 +156,7 @@ impl App {
             lt_results: Vec::new(),
             analysis: None,
             selected_match: None,
+            scroll_to_selected: false,
             gc_options: default_gc_options(),
             gc_options_open: false,
             popup_open: false,
@@ -925,7 +927,10 @@ impl eframe::App for App {
                 match action {
                     super::lt_panel::Action::Analyse => self.start_analysis(),
                     super::lt_panel::Action::Stop => self.analysis = None,
-                    super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
+                    super::lt_panel::Action::Select(i) => {
+                        self.selected_match = Some(i);
+                        self.scroll_to_selected = true;
+                    }
                     super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
                     super::lt_panel::Action::Unignore(e) => self.unignore(&e),
                     super::lt_panel::Action::SwitchAnalyzer(a) => {
@@ -945,12 +950,14 @@ impl eframe::App for App {
                 &self.lt_results,
                 self.config.app.line_height,
                 self.selected_match,
+                self.scroll_to_selected,
                 self.config.app.editor_max_width,
             ) {
                 self.popup_opened_at = ui.input(|inp| inp.time);
                 self.open_popup(i);
             }
         });
+        self.scroll_to_selected = false;
 
         let ctx = ui.ctx().clone();
         self.show_popup(&ctx);

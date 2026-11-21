@@ -7,6 +7,7 @@ pub fn show(
     matches: &[LtMatch],
     line_height: f32,
     selected: Option<usize>,
+    scroll_to: bool,
     max_width: Option<f32>,
 ) -> Option<usize> {
     let buf = file?;
@@ -62,6 +63,19 @@ pub fn show(
                         .show(ui)
                 };
                 paint_underlines(ui.painter(), &res.galley, res.galley_pos, matches, selected);
+
+                if scroll_to {
+                    if let Some(sel) = selected {
+                        if let Some(m) = matches.get(sel) {
+                            if let Some((rect, _)) = segments(&res.galley, m).into_iter().next() {
+                                ui.scroll_to_rect(
+                                    rect.translate(res.galley_pos.to_vec2()),
+                                    Some(egui::Align::Center),
+                                );
+                            }
+                        }
+                    }
+                }
 
                 // TextEdit non interactif ne capte que le survol : zone cliquable superposée.
                 let click = ui.interact(
