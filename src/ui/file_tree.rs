@@ -52,18 +52,18 @@ fn build_children(dir: &Path) -> Vec<TreeNode> {
             if name.starts_with('.') {
                 return None;
             }
-            let is_dir = path.is_dir();
-            let children = if is_dir {
-                build_children(&path)
+            if path.is_dir() {
+                let children = build_children(&path);
+                if children.is_empty() {
+                    return None;
+                }
+                Some(TreeNode { name, path, is_dir: true, children })
             } else {
-                vec![]
-            };
-            Some(TreeNode {
-                name,
-                path,
-                is_dir,
-                children,
-            })
+                if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    return None;
+                }
+                Some(TreeNode { name, path, is_dir: false, children: vec![] })
+            }
         })
         .collect();
     // Dossiers en premier, puis fichiers, alphabétiquement dans chaque groupe.
