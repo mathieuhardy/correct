@@ -20,6 +20,30 @@ impl Default for LanguageToolConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GrammalecteConfig {
+    pub binary: Option<String>,
+    pub url: String,
+}
+
+impl Default for GrammalecteConfig {
+    fn default() -> Self {
+        Self {
+            binary: None,
+            url: "http://localhost:8080".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Analyzer {
+    #[default]
+    LanguageTool,
+    Grammalecte,
+}
+
 /// `#[serde(default)]` : toute clé absente prend la valeur de `Default` (impl manuelle,
 /// car un `Default` dérivé donnerait `font_size = 0` et ferait paniquer epaint).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +84,8 @@ pub struct AppConfig {
     /// Survol du bouton « Ajouter au dictionnaire » dans le popup (optionnel).
     pub dictionary_color_bg: Option<String>,
     pub dictionary_color_fg: Option<String>,
+    /// Analyseur utilisé par défaut au démarrage.
+    pub default_analyzer: Analyzer,
 }
 
 impl Default for AppConfig {
@@ -84,6 +110,7 @@ impl Default for AppConfig {
             ignore_color_fg: None,
             dictionary_color_bg: None,
             dictionary_color_fg: None,
+            default_analyzer: Analyzer::LanguageTool,
         }
     }
 }
@@ -92,6 +119,8 @@ impl Default for AppConfig {
 pub struct Config {
     #[serde(default)]
     pub languagetool: LanguageToolConfig,
+    #[serde(default)]
+    pub grammalecte: GrammalecteConfig,
     #[serde(default)]
     pub app: AppConfig,
     /// Fichier présent mais illisible / invalide : on tourne avec les valeurs par défaut
@@ -312,6 +341,71 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "[app\nfont_size = 18"
+        );
+    }
+
+    // --- Phase 7 : config multi-analyseur ---
+
+    #[test]
+    fn default_analyzer_is_languagetool() {
+        let path = tmp_path();
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.app.default_analyzer, Analyzer::LanguageTool);
+    }
+
+    #[test]
+    fn analyzer_round_trip_toml() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[app]\ndefault_analyzer = \"grammalecte\"\n").unwrap();
+
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.app.default_analyzer, Analyzer::Grammalecte);
+
+        cfg.save_to(&path).unwrap();
+        let (back, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(back.app.default_analyzer, Analyzer::Grammalecte);
+    }
+
+    #[test]
+    fn grammalecte_config_round_trip() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "[grammalecte]\nbinary = \"python3 gc-server.py\"\nurl = \"http://localhost:9090\"\n",
+        )
+        .unwrap();
+
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.grammalecte.binary.as_deref(), Some("python3 gc-server.py"));
+        assert_eq!(cfg.grammalecte.url, "http://localhost:9090");
+    }
+
+    #[test]
+    fn grammalecte_defaults_when_section_absent() {
+        let path = tmp_path();
+        let (cfg, err) = Config::load_from(&path);
+        assert!(err.is_none());
+        assert_eq!(cfg.grammalecte.binary, None);
+        assert_eq!(cfg.grammalecte.url, "http://localhost:8080");
+    }
+
+    #[test]
+    fn unknown_analyzer_gives_readable_error() {
+        let path = tmp_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[app]\ndefault_analyzer = \"unknown_tool\"\n").unwrap();
+
+        let (_, err) = Config::load_from(&path);
+        let msg = err.unwrap();
+        assert!(
+            msg.contains("unknown_tool") || msg.contains("Config invalide"),
+            "message d'erreur peu lisible : {msg}"
         );
     }
 }

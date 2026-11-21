@@ -3,7 +3,12 @@ binary   = "languagetool-http-server"
 url      = "http://localhost:8081"
 language = "fr"
 
+[grammalecte]
+binary   = ""
+url      = "http://localhost:8080"
+
 [app]
+default_analyzer    = "languagetool"
 last_project        = ""
 font_size           = 14.0
 font_family         = "CommitMono Nerd Font"
