@@ -826,7 +826,7 @@ impl eframe::App for App {
             egui::Panel::bottom("status_bar").show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        egui::RichText::new("⬤")
+                        egui::RichText::new("⚠")
                             .size(size)
                             .color(egui::Color32::RED),
                     );

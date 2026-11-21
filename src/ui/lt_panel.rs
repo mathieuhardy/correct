@@ -75,6 +75,8 @@ pub fn show(
         Analyzer::Grammalecte => matches!(gc_status, GcStatus::Connected),
     } && !running;
 
+    ui.separator();
+
     ui.horizontal(|ui| {
         if ui
             .add_enabled(can_analyse, egui::Button::new("▶"))

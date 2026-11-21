@@ -29,8 +29,8 @@ struct GcResponse {
 
 #[derive(Deserialize)]
 struct GcParagraph {
-    #[serde(rename = "sParagraph")]
-    paragraph: String,
+    #[serde(rename = "iParagraph")]
+    i_paragraph: usize,
     #[serde(rename = "lGrammarErrors", default)]
     grammar_errors: Vec<GcGrammarError>,
     #[serde(rename = "lSpellingErrors", default)]
@@ -57,8 +57,7 @@ struct GcSpellingError {
     n_start: usize,
     #[serde(rename = "nEnd")]
     n_end: usize,
-    #[serde(rename = "aSuggestions", default)]
-    suggestions: Vec<String>,
+    // Pas de aSuggestions dans la réponse réelle de l'API Grammalecte.
 }
 
 impl GcClient {
@@ -72,6 +71,7 @@ impl GcClient {
 
     /// Tente de se connecter au serveur GC. Si inaccessible et qu'un binaire est configuré,
     /// le lance puis retente jusqu'à ~5 s.
+    /// Le script wrapper NixOS utilise `exec`, donc `child.kill()` atteint bien le processus Python.
     pub fn init(config: &GrammalecteConfig) -> (Self, GcStatus, Option<String>) {
         let http = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
@@ -157,14 +157,35 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
     let gc_resp: GcResponse = serde_json::from_str(body)
         .map_err(|e| format!("Réponse Grammalecte invalide : {e}"))?;
 
+    // Offsets de début de chaque paragraphe dans `text` (en caractères).
+    // Paragraphe i (1-based dans GC) → para_starts[i - 1].
+    let para_starts: Vec<usize> = {
+        let mut starts = vec![0usize];
+        let mut acc = 0usize;
+        for c in text.chars() {
+            acc += 1;
+            if c == '\n' {
+                starts.push(acc);
+            }
+        }
+        starts
+    };
+
     let mut matches = Vec::new();
-    let mut search_from = 0usize;
 
     for para in gc_resp.data {
-        let (char_base, next_search) = paragraph_char_base(text, search_from, &para.paragraph);
-        search_from = next_search;
+        let char_base = para_starts
+            .get(para.i_paragraph.saturating_sub(1))
+            .copied()
+            .unwrap_or(0);
 
-        let sentence = normalize_spaces(&para.paragraph);
+        // Sentence = texte du paragraphe reconstituée depuis l'entrée (GC ne la fournit pas).
+        let para_text: String = text
+            .chars()
+            .skip(char_base)
+            .take_while(|&c| c != '\n')
+            .collect();
+        let sentence = normalize_spaces(&para_text);
 
         for e in para.grammar_errors {
             let length = e.n_end.saturating_sub(e.n_start);
@@ -190,7 +211,7 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
                 message: String::new(),
                 rule_id: "SPELLING_ERROR".to_string(),
                 sentence: sentence.clone(),
-                replacements: e.suggestions,
+                replacements: vec![],
                 misspelling: true,
                 expanded: false,
                 ignored: false,
@@ -200,17 +221,6 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
     }
 
     Ok(matches)
-}
-
-/// Localise `para` dans `text` à partir de `from_byte`.
-/// Retourne `(char_offset_du_paragraphe, next_from_byte)`.
-fn paragraph_char_base(text: &str, from_byte: usize, para: &str) -> (usize, usize) {
-    let found_byte = text[from_byte..]
-        .find(para)
-        .map(|i| from_byte + i)
-        .unwrap_or(from_byte);
-    let char_offset = text[..found_byte].chars().count();
-    (char_offset, found_byte + para.len())
 }
 
 impl Drop for GcClient {
@@ -225,30 +235,25 @@ impl Drop for GcClient {
 mod tests {
     use super::*;
 
-    // Réponse /gc_text/fr pour "😀 C'est tres importent pour nous."
+    // Réponse /gc_text/fr réelle pour "😀 C'est tres importent pour nous."
     // Les offsets sont en caractères Unicode : 😀 = 1 caractère.
-    // tres   : chars 8–11 → nStart=8, nEnd=12
-    // importent : chars 13–21 → nStart=13, nEnd=22
+    // Grammar (importent) : nStart=13, nEnd=22
+    // Spelling (tres)     : nStart=8,  nEnd=12  (pas de aSuggestions dans l'API)
     const RESPONSE: &str = r#"{
+        "program": "grammalecte-fr", "version": "2.1.1", "lang": "fr", "error": "",
         "data": [
             {
                 "iParagraph": 1,
-                "sParagraph": "😀 C'est tres importent pour nous.",
                 "lGrammarErrors": [
                     {
-                        "nStart": 13,
-                        "nEnd": 22,
+                        "nStart": 13, "nEnd": 22,
                         "sMessage": "Accord erroné.",
                         "sRuleId": "GC_RULE_1",
                         "aSuggestions": ["important"]
                     }
                 ],
                 "lSpellingErrors": [
-                    {
-                        "nStart": 8,
-                        "nEnd": 12,
-                        "aSuggestions": ["très", "trees"]
-                    }
+                    {"i": 2, "sType": "WORD", "sValue": "tres", "nStart": 8, "nEnd": 12}
                 ]
             }
         ]
@@ -269,7 +274,7 @@ mod tests {
 
         let spelling = m.iter().find(|e| e.misspelling).unwrap();
         assert_eq!(spelling.word(text), "tres");
-        assert_eq!(spelling.replacements, vec!["très", "trees"]);
+        assert!(spelling.replacements.is_empty()); // pas de suggestions dans l'API GC
         assert!(spelling.misspelling);
         assert_eq!(spelling.rule_id, "SPELLING_ERROR");
         assert!(spelling.message.is_empty());
@@ -278,14 +283,14 @@ mod tests {
     #[test]
     fn emoji_offsets_are_char_based() {
         // 😀 = 1 caractère en Unicode, 2 unités UTF-16.
-        // GC donne des offsets en caractères, donc "tres" après "😀 " est à nStart=2.
+        // GC donne des offsets en caractères : "tres" après "😀 " est à nStart=2.
         let text = "😀 tres";
         let body = r#"{
+            "program": "grammalecte-fr", "version": "2.1.1", "lang": "fr", "error": "",
             "data": [{
                 "iParagraph": 1,
-                "sParagraph": "😀 tres",
                 "lGrammarErrors": [],
-                "lSpellingErrors": [{"nStart": 2, "nEnd": 6, "aSuggestions": ["très"]}]
+                "lSpellingErrors": [{"i": 1, "sType": "WORD", "sValue": "tres", "nStart": 2, "nEnd": 6}]
             }]
         }"#;
         let m = parse_matches(text, body).unwrap();
@@ -298,21 +303,16 @@ mod tests {
     #[test]
     fn multiline_paragraph_offsets() {
         // "Premier paragraphe." = 19 chars, '\n' = char 19, deuxième para commence à char 20.
-        // "erreur" dans le deuxième para commence à nStart=25 → offset absolu = 20 + 25 = 45.
+        // "erreur" dans le deuxième para à nStart=25 → offset absolu = 20 + 25 = 45.
         let text = "Premier paragraphe.\nDeuxième paragraphe avec erreur.";
         let body = r#"{
+            "program": "grammalecte-fr", "version": "2.1.1", "lang": "fr", "error": "",
             "data": [
-                {
-                    "iParagraph": 1,
-                    "sParagraph": "Premier paragraphe.",
-                    "lGrammarErrors": [],
-                    "lSpellingErrors": []
-                },
+                {"iParagraph": 1, "lGrammarErrors": [], "lSpellingErrors": []},
                 {
                     "iParagraph": 2,
-                    "sParagraph": "Deuxième paragraphe avec erreur.",
                     "lGrammarErrors": [],
-                    "lSpellingErrors": [{"nStart": 25, "nEnd": 31, "aSuggestions": []}]
+                    "lSpellingErrors": [{"i": 5, "sType": "WORD", "sValue": "erreur", "nStart": 25, "nEnd": 31}]
                 }
             ]
         }"#;
@@ -323,22 +323,14 @@ mod tests {
     }
 
     #[test]
-    fn sentence_from_paragraph() {
-        let text = "Bonjour.";
-        let body = r#"{"data": [{"iParagraph": 1, "sParagraph": "Bonjour.", "lGrammarErrors": [], "lSpellingErrors": []}]}"#;
-        let m = parse_matches(text, body).unwrap();
-        assert!(m.is_empty());
-    }
-
-    #[test]
-    fn sentence_field_uses_paragraph() {
+    fn sentence_field_uses_paragraph_text() {
         let text = "Une phrase simple.";
         let body = r#"{
+            "program": "grammalecte-fr", "version": "2.1.1", "lang": "fr", "error": "",
             "data": [{
                 "iParagraph": 1,
-                "sParagraph": "Une phrase simple.",
                 "lGrammarErrors": [],
-                "lSpellingErrors": [{"nStart": 4, "nEnd": 10, "aSuggestions": []}]
+                "lSpellingErrors": [{"i": 1, "sType": "WORD", "sValue": "phrase", "nStart": 4, "nEnd": 10}]
             }]
         }"#;
         let m = parse_matches(text, body).unwrap();
@@ -347,7 +339,8 @@ mod tests {
 
     #[test]
     fn parse_empty_and_invalid() {
-        assert!(parse_matches("ok", r#"{"data": []}"#).unwrap().is_empty());
+        let empty = r#"{"program":"grammalecte-fr","version":"2.1.1","lang":"fr","error":"","data":[]}"#;
+        assert!(parse_matches("ok", empty).unwrap().is_empty());
         assert!(parse_matches("ok", "<html>502</html>")
             .unwrap_err()
             .contains("invalide"));
