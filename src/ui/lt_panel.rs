@@ -39,7 +39,59 @@ pub fn show(
             egui::Color32::from_rgb(220, 80, 80)
         }
     };
-    let status_tip = |connected: bool| if connected { "Connecté" } else { "Inaccessible" };
+    let status_tip = |connected: bool| {
+        if connected {
+            "Connecté"
+        } else {
+            "Inaccessible"
+        }
+    };
+
+    // Mots du dictionnaire du projet, retirables un par un.
+    egui::CollapsingHeader::new(format!("Dictionnaire ({})", dictionary.len()))
+        .id_salt("lt_dictionary")
+        .show(ui, |ui| {
+            if dictionary.is_empty() {
+                ui.label(egui::RichText::new("Aucun mot").weak());
+            }
+            for w in dictionary {
+                ui.horizontal(|ui| {
+                    if ui
+                        .small_button("✗")
+                        .on_hover_text("Retirer du dictionnaire")
+                        .clicked()
+                    {
+                        action = Action::RemoveWord(w.clone());
+                    }
+                    ui.label(w);
+                });
+            }
+        });
+
+    // Éléments ignorés du fichier ouvert, rétablissables un par un.
+    if let Some(ignored) = ignored {
+        egui::CollapsingHeader::new(format!("Ignorés ({})", ignored.len()))
+            .id_salt("lt_ignored")
+            .show(ui, |ui| {
+                if ignored.is_empty() {
+                    ui.label(egui::RichText::new("Aucun élément ignoré").weak());
+                }
+                for e in ignored {
+                    ui.horizontal(|ui| {
+                        if ui
+                            .small_button("✗")
+                            .on_hover_text("Ne plus ignorer")
+                            .clicked()
+                        {
+                            action = Action::Unignore(e.clone());
+                        }
+                        ui.label(format!("\"{}\"", e.text))
+                            .on_hover_text(&e.sentence);
+                    });
+                }
+            });
+    }
+    ui.separator();
 
     // Toggle LT / Gc avec statut ● indépendant pour chaque analyseur.
     ui.horizontal(|ui| {
@@ -104,55 +156,9 @@ pub fn show(
     ui.add_space(4.0);
     ui.separator();
 
-    // Mots du dictionnaire du projet, retirables un par un.
-    egui::CollapsingHeader::new(format!("Dictionnaire ({})", dictionary.len()))
-        .id_salt("lt_dictionary")
-        .show(ui, |ui| {
-            if dictionary.is_empty() {
-                ui.label(egui::RichText::new("Aucun mot").weak());
-            }
-            for w in dictionary {
-                ui.horizontal(|ui| {
-                    if ui
-                        .small_button("✗")
-                        .on_hover_text("Retirer du dictionnaire")
-                        .clicked()
-                    {
-                        action = Action::RemoveWord(w.clone());
-                    }
-                    ui.label(w);
-                });
-            }
-        });
-
-    // Éléments ignorés du fichier ouvert, rétablissables un par un.
-    if let Some(ignored) = ignored {
-        egui::CollapsingHeader::new(format!("Ignorés ({})", ignored.len()))
-            .id_salt("lt_ignored")
-            .show(ui, |ui| {
-                if ignored.is_empty() {
-                    ui.label(egui::RichText::new("Aucun élément ignoré").weak());
-                }
-                for e in ignored {
-                    ui.horizontal(|ui| {
-                        if ui
-                            .small_button("✗")
-                            .on_hover_text("Ne plus ignorer")
-                            .clicked()
-                        {
-                            action = Action::Unignore(e.clone());
-                        }
-                        ui.label(format!("\"{}\"", e.text))
-                            .on_hover_text(&e.sentence);
-                    });
-                }
-            });
-    }
-    ui.separator();
-
     let n = matches.iter().filter(|m| !m.hidden()).count();
     if n > 0 {
-        ui.label(format!("⚠ {} problème{}", n, if n > 1 { "s" } else { "" }));
+        ui.label(format!("󰀦 {} problème{}", n, if n > 1 { "s" } else { "" }));
         ui.add_space(4.0);
     }
 
