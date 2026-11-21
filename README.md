@@ -232,15 +232,15 @@ src/
 
 ### Phase 8 — Client Grammalecte
 
-- [ ] `src/grammalecte.rs` : `GcClient` + `GcChecker` (même pattern que `languagetool.rs`)
-- [ ] Health check : `GET /get_options/fr` → 200 si opérationnel (spawn binaire si configuré, même logique que LT)
-- [ ] `POST /gc_text/fr` (form-encoded : `text`, `options` JSON)
-- [ ] Parser la réponse : fusionner `lGrammarErrors` + `lSpellingErrors` → `Vec<LtMatch>`
-- [ ] Offsets `nStart`/`nEnd` char-based (pas de conversion UTF-16, simplification vs LT)
-- [ ] `nEnd` exclusif → `length = nEnd - nStart`
-- [ ] `sentence` absent dans la réponse → reconstitué depuis `sParagraph`
-- [ ] `lSpellingErrors` → `misspelling = true`
-- [ ] Tests unitaires : parsing JSON, cas emoji, spelling vs grammaire
+- [x] `src/grammalecte.rs` : `GcClient` + `GcChecker` (même pattern que `languagetool.rs`)
+- [x] Health check : `GET /get_options/fr` → 200 si opérationnel (spawn binaire si configuré, même logique que LT)
+- [x] `POST /gc_text/fr` (form-encoded : `text`, `options` JSON)
+- [x] Parser la réponse : fusionner `lGrammarErrors` + `lSpellingErrors` → `Vec<LtMatch>`
+- [x] Offsets `nStart`/`nEnd` char-based (pas de conversion UTF-16, simplification vs LT)
+- [x] `nEnd` exclusif → `length = nEnd - nStart`
+- [x] `sentence` absent dans la réponse → reconstitué depuis `sParagraph`
+- [x] `lSpellingErrors` → `misspelling = true`
+- [x] Tests unitaires : parsing JSON, cas emoji, spelling vs grammaire
 
 ### Phase 9 — Toggle UI et orchestration
 

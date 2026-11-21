@@ -1,5 +1,6 @@
 mod config;
 mod dictionary;
+mod grammalecte;
 mod ignored;
 mod languagetool;
 mod ui;
