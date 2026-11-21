@@ -228,6 +228,50 @@ fn parse_matches(text: &str, body: &str) -> Result<Vec<LtMatch>, String> {
     Ok(matches)
 }
 
+const GC_OPTIONS_FILE: &str = ".correct/gc_options.toml";
+
+/// Charge les options depuis `<project>/.correct/gc_options.toml`.
+/// Retourne les defaults si le fichier est absent.
+pub fn load_gc_options(project: &std::path::Path) -> (HashMap<String, bool>, Option<String>) {
+    let path = project.join(GC_OPTIONS_FILE);
+    match std::fs::read_to_string(&path) {
+        Ok(content) => match toml::from_str::<HashMap<String, bool>>(&content) {
+            Ok(opts) => (opts, None),
+            Err(e) => (
+                default_gc_options(),
+                Some(format!("Options GC invalides ({}) : {e}", path.display())),
+            ),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (default_gc_options(), None),
+        Err(e) => (
+            default_gc_options(),
+            Some(format!("Impossible de lire les options GC : {e}")),
+        ),
+    }
+}
+
+pub fn save_gc_options(
+    project: &std::path::Path,
+    options: &HashMap<String, bool>,
+) -> Result<(), String> {
+    let path = project.join(GC_OPTIONS_FILE);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Impossible de créer .correct/ : {e}"))?;
+    }
+    let content = toml::to_string_pretty(options)
+        .map_err(|e| format!("Erreur de sérialisation des options GC : {e}"))?;
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Impossible d'écrire les options GC ({}) : {e}", path.display()))
+}
+
+pub fn default_gc_options() -> HashMap<String, bool> {
+    let mut m = HashMap::new();
+    m.insert("redon2".into(), true);
+    m.insert("md".into(), true);
+    m
+}
+
 impl Drop for GcClient {
     fn drop(&mut self) {
         if let Some(ref mut child) = self.child {

@@ -1,8 +1,9 @@
 use crate::config::{Analyzer, Config};
 use crate::dictionary::Dictionary;
-use crate::grammalecte::{GcClient, GcStatus};
+use crate::grammalecte::{GcClient, GcStatus, default_gc_options, load_gc_options, save_gc_options};
 use crate::ignored::{Ignored, IgnoredList, relative_path};
 use crate::languagetool::{LtClient, LtMatch, LtStatus};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
@@ -30,6 +31,7 @@ pub struct App {
     /// Analyse LT en cours sur un thread (None = aucune).
     analysis: Option<PendingAnalysis>,
     pub selected_match: Option<usize>,
+    pub gc_options: HashMap<String, bool>,
     pub gc_options_open: bool,
     pub popup_open: bool,
     pub popup_opened_at: f64,
@@ -153,6 +155,7 @@ impl App {
             lt_results: Vec::new(),
             analysis: None,
             selected_match: None,
+            gc_options: default_gc_options(),
             gc_options_open: false,
             popup_open: false,
             popup_opened_at: 0.0,
@@ -177,6 +180,11 @@ impl App {
     fn load_project(&mut self, path: PathBuf) {
         self.reload_dictionary(&path);
         self.reload_ignored(&path);
+        let (opts, err) = load_gc_options(&path);
+        self.gc_options = opts;
+        if let Some(e) = err {
+            self.app_error = Some(e);
+        }
         // Entrées des fichiers supprimés / renommés depuis la dernière session.
         if !self.ignored.is_locked()
             && self.ignored.prune_missing(&path)
@@ -418,7 +426,7 @@ impl App {
                 if self.gc_status != GcStatus::Connected {
                     return;
                 }
-                let checker = self.gc_client.checker(&self.config.grammalecte.options);
+                let checker = self.gc_client.checker(&self.gc_options);
                 std::thread::spawn(move || {
                     let _ = tx.send(checker.check(&thread_text));
                     ctx.request_repaint();
@@ -487,20 +495,16 @@ impl App {
         if !self.gc_options_open {
             return;
         }
-        match super::gc_options_modal::show(ctx, &self.config.grammalecte.options) {
+        match super::gc_options_modal::show(ctx, &self.gc_options) {
             super::gc_options_modal::Action::None => {}
             super::gc_options_modal::Action::Close => self.gc_options_open = false,
             super::gc_options_modal::Action::Toggle(key) => {
-                let current = self
-                    .config
-                    .grammalecte
-                    .options
-                    .get(&key)
-                    .copied()
-                    .unwrap_or(false);
-                self.config.grammalecte.options.insert(key, !current);
-                if let Err(e) = self.config.save() {
-                    self.app_error = Some(e);
+                let current = self.gc_options.get(&key).copied().unwrap_or(false);
+                self.gc_options.insert(key, !current);
+                if let Some(project) = self.current_project.as_ref() {
+                    if let Err(e) = save_gc_options(project, &self.gc_options) {
+                        self.app_error = Some(e);
+                    }
                 }
             }
         }
