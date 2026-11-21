@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::config::Analyzer;
 use crate::languagetool::LtMatch;
 
 /// Empreinte d'un élément ignoré, indépendante de sa position dans le fichier :
@@ -9,6 +10,8 @@ use crate::languagetool::LtMatch;
 pub struct Ignored {
     /// Chemin relatif à la racine du projet, séparateurs `/`.
     pub file: String,
+    #[serde(default)]
+    pub analyzer: Analyzer,
     pub rule: String,
     pub text: String,
     /// Phrase contenant l'élément, espaces normalisés.
@@ -16,9 +19,10 @@ pub struct Ignored {
 }
 
 impl Ignored {
-    pub fn of(file: &str, m: &LtMatch, content: &str) -> Self {
+    pub fn of(file: &str, analyzer: Analyzer, m: &LtMatch, content: &str) -> Self {
         Self {
             file: file.to_string(),
+            analyzer,
             rule: m.rule_id.clone(),
             text: m.word(content),
             sentence: m.sentence.clone(),
@@ -115,12 +119,12 @@ impl IgnoredList {
         true
     }
 
-    /// Empreintes d'un fichier, triées par mot puis phrase.
-    pub fn for_file(&self, file: &str) -> Vec<Ignored> {
+    /// Empreintes d'un fichier pour un analyseur donné, triées par mot puis phrase.
+    pub fn for_file(&self, file: &str, analyzer: Analyzer) -> Vec<Ignored> {
         let mut v: Vec<Ignored> = self
             .ignored
             .iter()
-            .filter(|e| e.file == file)
+            .filter(|e| e.file == file && e.analyzer == analyzer)
             .cloned()
             .collect();
         v.sort_by(|a, b| (&a.text, &a.sentence).cmp(&(&b.text, &b.sentence)));
@@ -132,13 +136,13 @@ impl IgnoredList {
         self.ignored.retain(|e| e != entry);
     }
 
-    /// Réconciliation après une analyse réussie de `file` : retire ses empreintes qui ne
-    /// correspondent plus à aucune erreur (mot supprimé, corrigé, phrase modifiée).
+    /// Réconciliation après une analyse réussie de `file` pour `analyzer` : retire les
+    /// empreintes de cet analyseur qui ne correspondent plus à aucune erreur.
     /// Retourne true si la liste a changé.
-    pub fn prune(&mut self, file: &str, current: &[Ignored]) -> bool {
+    pub fn prune(&mut self, file: &str, analyzer: Analyzer, current: &[Ignored]) -> bool {
         let before = self.ignored.len();
         self.ignored
-            .retain(|e| e.file != file || current.contains(e));
+            .retain(|e| e.file != file || e.analyzer != analyzer || current.contains(e));
         self.ignored.len() != before
     }
 
@@ -182,7 +186,7 @@ mod tests {
     fn entry(text: &str, word: &str) -> Ignored {
         let offset = text[..text.find(word).unwrap()].chars().count();
         let m = LtMatch::for_test(offset, word.chars().count(), "FR_SPELLING_RULE", text);
-        Ignored::of("docs/notes.md", &m, text)
+        Ignored::of("docs/notes.md", Analyzer::default(), &m, text)
     }
 
     #[test]
@@ -193,7 +197,7 @@ mod tests {
         let sentence = "Le dossier est tres\nimportant.";
         let offset = text[..text.find("tres").unwrap()].chars().count();
         let m = LtMatch::for_test(offset, 4, "FR_SPELLING_RULE", sentence);
-        assert_eq!(Ignored::of("docs/notes.md", &m, text), before);
+        assert_eq!(Ignored::of("docs/notes.md", Analyzer::default(), &m, text), before);
     }
 
     #[test]
@@ -210,7 +214,7 @@ mod tests {
         list.add(other.clone());
 
         // Nouvelle analyse de notes.md : seule `kept` est encore signalée.
-        assert!(list.prune("docs/notes.md", std::slice::from_ref(&kept)));
+        assert!(list.prune("docs/notes.md", Analyzer::default(), std::slice::from_ref(&kept)));
         assert!(list.contains(&kept));
         assert!(!list.contains(&gone));
         assert!(
@@ -219,10 +223,10 @@ mod tests {
         );
 
         // Plus rien de signalé pour notes.md : plus aucune entrée pour ce fichier.
-        assert!(list.prune("docs/notes.md", &[]));
+        assert!(list.prune("docs/notes.md", Analyzer::default(), &[]));
         assert_eq!(list.ignored, vec![other]);
         assert!(
-            !list.prune("docs/notes.md", &[]),
+            !list.prune("docs/notes.md", Analyzer::default(), &[]),
             "rien à purger : pas de changement"
         );
     }

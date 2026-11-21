@@ -221,7 +221,7 @@ impl App {
             m.in_dictionary = self.dictionary.is_exception(&m.word(&buf.content));
             m.ignored = file
                 .as_deref()
-                .is_some_and(|f| self.ignored.contains(&Ignored::of(f, m, &buf.content)));
+                .is_some_and(|f| self.ignored.contains(&Ignored::of(f, self.active_analyzer.clone(), m, &buf.content)));
         }
         if self
             .selected_match
@@ -268,7 +268,7 @@ impl App {
         let Some(m) = self.lt_results.get(i) else {
             return;
         };
-        let entry = Ignored::of(&file, m, &buf.content);
+        let entry = Ignored::of(&file, self.active_analyzer.clone(), m, &buf.content);
         if self.ignored.add(entry.clone())
             && let Err(e) = self.ignored.save(project)
         {
@@ -305,12 +305,13 @@ impl App {
         else {
             return;
         };
+        let analyzer = self.active_analyzer.clone();
         let current: Vec<Ignored> = self
             .lt_results
             .iter()
-            .map(|m| Ignored::of(&file, m, &buf.content))
+            .map(|m| Ignored::of(&file, analyzer.clone(), m, &buf.content))
             .collect();
-        if self.ignored.prune(&file, &current)
+        if self.ignored.prune(&file, analyzer, &current)
             && let Err(e) = self.ignored.save(project)
         {
             self.app_error = Some(e);
@@ -877,7 +878,7 @@ impl eframe::App for App {
                     .as_ref()
                     .map(|f| f.content.as_str())
                     .unwrap_or("");
-                let file_ignored = self.relative_open_file().map(|f| self.ignored.for_file(&f));
+                let file_ignored = self.relative_open_file().map(|f| self.ignored.for_file(&f, self.active_analyzer.clone()));
                 let action = super::lt_panel::show(
                     ui,
                     &self.lt_status,
