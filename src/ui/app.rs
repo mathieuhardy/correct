@@ -30,6 +30,7 @@ pub struct App {
     /// Analyse LT en cours sur un thread (None = aucune).
     analysis: Option<PendingAnalysis>,
     pub selected_match: Option<usize>,
+    pub gc_options_open: bool,
     pub popup_open: bool,
     pub popup_opened_at: f64,
     pub popup_armed: bool,
@@ -152,6 +153,7 @@ impl App {
             lt_results: Vec::new(),
             analysis: None,
             selected_match: None,
+            gc_options_open: false,
             popup_open: false,
             popup_opened_at: 0.0,
             popup_armed: false,
@@ -416,7 +418,7 @@ impl App {
                 if self.gc_status != GcStatus::Connected {
                     return;
                 }
-                let checker = self.gc_client.checker();
+                let checker = self.gc_client.checker(&self.config.grammalecte.options);
                 std::thread::spawn(move || {
                     let _ = tx.send(checker.check(&thread_text));
                     ctx.request_repaint();
@@ -479,6 +481,29 @@ impl App {
     fn close_popup(&mut self) {
         self.selected_match = None;
         self.popup_open = false;
+    }
+
+    fn show_gc_options(&mut self, ctx: &egui::Context) {
+        if !self.gc_options_open {
+            return;
+        }
+        match super::gc_options_modal::show(ctx, &self.config.grammalecte.options) {
+            super::gc_options_modal::Action::None => {}
+            super::gc_options_modal::Action::Close => self.gc_options_open = false,
+            super::gc_options_modal::Action::Toggle(key) => {
+                let current = self
+                    .config
+                    .grammalecte
+                    .options
+                    .get(&key)
+                    .copied()
+                    .unwrap_or(false);
+                self.config.grammalecte.options.insert(key, !current);
+                if let Err(e) = self.config.save() {
+                    self.app_error = Some(e);
+                }
+            }
+        }
     }
 
     fn show_popup(&mut self, ctx: &egui::Context) {
@@ -903,6 +928,7 @@ impl eframe::App for App {
                         self.active_analyzer = a;
                         self.start_analysis();
                     }
+                    super::lt_panel::Action::OpenGcOptions => self.gc_options_open = true,
                     super::lt_panel::Action::None => {}
                 }
             });
@@ -924,5 +950,6 @@ impl eframe::App for App {
 
         let ctx = ui.ctx().clone();
         self.show_popup(&ctx);
+        self.show_gc_options(&ctx);
     }
 }

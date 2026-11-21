@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// `#[serde(default)]` : toute clé absente prend la valeur de `Default`.
@@ -25,6 +26,8 @@ impl Default for LanguageToolConfig {
 pub struct GrammalecteConfig {
     pub binary: Option<String>,
     pub url: String,
+    /// Options envoyées à chaque requête. Clé absente = défaut Grammalecte.
+    pub options: HashMap<String, bool>,
 }
 
 impl Default for GrammalecteConfig {
@@ -32,8 +35,16 @@ impl Default for GrammalecteConfig {
         Self {
             binary: None,
             url: "http://localhost:8080".to_string(),
+            options: default_gc_options(),
         }
     }
+}
+
+fn default_gc_options() -> HashMap<String, bool> {
+    let mut m = HashMap::new();
+    m.insert("redon2".into(), true); // répétitions dans la phrase, peu bruyant
+    m.insert("md".into(), true);     // ignore la syntaxe Markdown
+    m
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]

@@ -11,6 +11,7 @@ pub enum Action {
     Unignore(Ignored),
     Stop,
     SwitchAnalyzer(Analyzer),
+    OpenGcOptions,
 }
 
 #[allow(clippy::too_many_arguments)] // état d'affichage passé à plat, un seul appelant
@@ -119,6 +120,14 @@ pub fn show(
             && !matches!(active_analyzer, Analyzer::Grammalecte)
         {
             action = Action::SwitchAnalyzer(Analyzer::Grammalecte);
+        }
+
+        if ui
+            .add_enabled(gc_conn, egui::Button::new("⚙"))
+            .on_hover_text("Options Grammalecte")
+            .clicked()
+        {
+            action = Action::OpenGcOptions;
         }
     });
 

@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::config::GrammalecteConfig;
@@ -20,6 +21,7 @@ pub enum GcStatus {
 pub struct GcChecker {
     url: String,
     http: reqwest::blocking::Client,
+    options: HashMap<String, bool>,
 }
 
 #[derive(Deserialize)]
@@ -120,10 +122,11 @@ impl GcClient {
         }
     }
 
-    pub fn checker(&self) -> GcChecker {
+    pub fn checker(&self, options: &HashMap<String, bool>) -> GcChecker {
         GcChecker {
             url: self.url.clone(),
             http: self.http.clone(),
+            options: options.clone(),
         }
     }
 }
@@ -132,10 +135,12 @@ impl GcChecker {
     /// Envoie le texte à Grammalecte et retourne toutes les correspondances.
     /// Les offsets GC sont en caractères Unicode (pas de conversion UTF-16 nécessaire).
     pub fn check(&self, text: &str) -> Result<Vec<LtMatch>, String> {
+        let options_json = serde_json::to_string(&self.options)
+            .unwrap_or_else(|_| "{}".to_string());
         let resp = self
             .http
             .post(format!("{}/gc_text/fr", self.url))
-            .form(&[("text", text), ("options", "{}")])
+            .form(&[("text", text), ("options", &options_json)])
             .send()
             .map_err(|e| format!("Erreur réseau Grammalecte : {e}"))?;
 
