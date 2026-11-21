@@ -244,10 +244,10 @@ src/
 
 ### Phase 9 — Toggle UI et orchestration
 
-- [ ] Toggle dans l'en-tête du panneau droit : `[LT] [Gc]` (radio-style)
-- [ ] `AppState::active_analyzer: Analyzer` initialisé depuis `default_analyzer`
-- [ ] Statut `●` indépendant pour chaque analyseur (LT peut être rouge pendant que GC est vert)
-- [ ] Switch d'analyseur relance l'analyse du fichier ouvert
+- [x] Toggle dans l'en-tête du panneau droit : `[LT] [Gc]` (radio-style)
+- [x] `AppState::active_analyzer: Analyzer` initialisé depuis `default_analyzer`
+- [x] Statut `●` indépendant pour chaque analyseur (LT peut être rouge pendant que GC est vert)
+- [x] Switch d'analyseur relance l'analyse du fichier ouvert
 
 ### Phase 10 — Options Grammalecte dans la config
 

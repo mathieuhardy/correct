@@ -1,5 +1,6 @@
-use crate::config::Config;
+use crate::config::{Analyzer, Config};
 use crate::dictionary::Dictionary;
+use crate::grammalecte::{GcClient, GcStatus};
 use crate::ignored::{Ignored, IgnoredList, relative_path};
 use crate::languagetool::{LtClient, LtMatch, LtStatus};
 use std::path::PathBuf;
@@ -19,6 +20,9 @@ pub struct App {
     ctx: egui::Context,
     pub lt_client: LtClient,
     pub lt_status: LtStatus,
+    pub gc_client: GcClient,
+    pub gc_status: GcStatus,
+    pub active_analyzer: Analyzer,
     pub current_project: Option<PathBuf>,
     pub open_file: Option<FileBuffer>,
     pub file_tree: FileTree,
@@ -66,6 +70,9 @@ impl App {
 
         let (lt_client, lt_status, lt_error) = LtClient::init(&config.languagetool);
         errors.extend(lt_error);
+        let (gc_client, gc_status, gc_error) = GcClient::init(&config.grammalecte);
+        errors.extend(gc_error);
+        let active_analyzer = config.app.default_analyzer.clone();
 
         let accent_bg = config
             .app
@@ -136,6 +143,9 @@ impl App {
             ctx: cc.egui_ctx.clone(),
             lt_client,
             lt_status,
+            gc_client,
+            gc_status,
+            active_analyzer,
             current_project: None,
             open_file: None,
             file_tree: FileTree::empty(),
@@ -375,7 +385,7 @@ impl App {
     }
 
     /// Lance l'analyse du fichier ouvert sur un thread (remplace toute analyse en cours).
-    /// Vide le panneau ; sans connexion LT, se contente d'annuler l'analyse précédente.
+    /// Vide le panneau ; sans connexion pour l'analyseur actif, annule l'analyse précédente.
     fn start_analysis(&mut self) {
         self.lt_results.clear();
         self.close_popup();
@@ -384,20 +394,34 @@ impl App {
         let Some(buf) = self.open_file.as_ref() else {
             return;
         };
-        if self.lt_status != LtStatus::Connected {
-            return;
-        }
 
         let (tx, rx) = channel();
-        let checker = self.lt_client.checker();
         let ctx = self.ctx.clone();
         let text = buf.content.clone();
         let thread_text = text.clone();
-        std::thread::spawn(move || {
-            // Réception abandonnée (annulation, autre fichier) : envoi ignoré.
-            let _ = tx.send(checker.check(&thread_text));
-            ctx.request_repaint();
-        });
+
+        match self.active_analyzer {
+            Analyzer::LanguageTool => {
+                if self.lt_status != LtStatus::Connected {
+                    return;
+                }
+                let checker = self.lt_client.checker();
+                std::thread::spawn(move || {
+                    let _ = tx.send(checker.check(&thread_text));
+                    ctx.request_repaint();
+                });
+            }
+            Analyzer::Grammalecte => {
+                if self.gc_status != GcStatus::Connected {
+                    return;
+                }
+                let checker = self.gc_client.checker();
+                std::thread::spawn(move || {
+                    let _ = tx.send(checker.check(&thread_text));
+                    ctx.request_repaint();
+                });
+            }
+        }
 
         self.analysis = Some(PendingAnalysis {
             path: buf.path.clone(),
@@ -839,11 +863,15 @@ impl eframe::App for App {
                 }
             });
 
-        // Panneau droit — LanguageTool
+        // Panneau droit — analyseur actif
+        let analyzer_title = match self.active_analyzer {
+            Analyzer::LanguageTool => "LanguageTool",
+            Analyzer::Grammalecte => "Grammalecte",
+        };
         egui::Panel::right("lt_panel")
             .default_size(260.0)
             .show(ui, |ui| {
-                panel_header(ui, "󰓆", "LanguageTool", abg, afg, None);
+                panel_header(ui, "󰓆", analyzer_title, abg, afg, None);
                 let text = self
                     .open_file
                     .as_ref()
@@ -853,6 +881,8 @@ impl eframe::App for App {
                 let action = super::lt_panel::show(
                     ui,
                     &self.lt_status,
+                    &self.gc_status,
+                    &self.active_analyzer,
                     text,
                     &mut self.lt_results,
                     &self.dictionary.words,
@@ -868,6 +898,10 @@ impl eframe::App for App {
                     super::lt_panel::Action::Select(i) => self.selected_match = Some(i),
                     super::lt_panel::Action::RemoveWord(w) => self.remove_from_dictionary(&w),
                     super::lt_panel::Action::Unignore(e) => self.unignore(&e),
+                    super::lt_panel::Action::SwitchAnalyzer(a) => {
+                        self.active_analyzer = a;
+                        self.start_analysis();
+                    }
                     super::lt_panel::Action::None => {}
                 }
             });

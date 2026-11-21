@@ -1,3 +1,5 @@
+use crate::config::Analyzer;
+use crate::grammalecte::GcStatus;
 use crate::ignored::Ignored;
 use crate::languagetool::{LtMatch, LtStatus};
 
@@ -8,12 +10,15 @@ pub enum Action {
     RemoveWord(String),
     Unignore(Ignored),
     Stop,
+    SwitchAnalyzer(Analyzer),
 }
 
 #[allow(clippy::too_many_arguments)] // état d'affichage passé à plat, un seul appelant
 pub fn show(
     ui: &mut egui::Ui,
-    status: &LtStatus,
+    lt_status: &LtStatus,
+    gc_status: &GcStatus,
+    active_analyzer: &Analyzer,
     text: &str,
     matches: &mut [LtMatch],
     dictionary: &[String],
@@ -23,20 +28,54 @@ pub fn show(
     selection_fg: Option<egui::Color32>,
     running: bool,
 ) -> Action {
-    let (dot_color, dot_tip) = match status {
-        LtStatus::Connected => (egui::Color32::from_rgb(80, 200, 120), "Connecté"),
-        LtStatus::Unreachable => (egui::Color32::from_rgb(220, 80, 80), "Inaccessible"),
-    };
-
     ui.add_space(6.0);
 
     let mut action = Action::None;
-    let can_analyse = matches!(status, LtStatus::Connected) && !running;
 
+    let status_dot = |connected: bool| -> egui::Color32 {
+        if connected {
+            egui::Color32::from_rgb(80, 200, 120)
+        } else {
+            egui::Color32::from_rgb(220, 80, 80)
+        }
+    };
+    let status_tip = |connected: bool| if connected { "Connecté" } else { "Inaccessible" };
+
+    // Toggle LT / Gc avec statut ● indépendant pour chaque analyseur.
     ui.horizontal(|ui| {
-        ui.colored_label(dot_color, "●").on_hover_text(dot_tip);
+        let lt_conn = matches!(lt_status, LtStatus::Connected);
+        ui.colored_label(status_dot(lt_conn), "●")
+            .on_hover_text(format!("LanguageTool : {}", status_tip(lt_conn)));
+        if ui
+            .selectable_label(matches!(active_analyzer, Analyzer::LanguageTool), "LT")
+            .on_hover_text("LanguageTool")
+            .clicked()
+            && !matches!(active_analyzer, Analyzer::LanguageTool)
+        {
+            action = Action::SwitchAnalyzer(Analyzer::LanguageTool);
+        }
+
         ui.separator();
 
+        let gc_conn = matches!(gc_status, GcStatus::Connected);
+        ui.colored_label(status_dot(gc_conn), "●")
+            .on_hover_text(format!("Grammalecte : {}", status_tip(gc_conn)));
+        if ui
+            .selectable_label(matches!(active_analyzer, Analyzer::Grammalecte), "Gc")
+            .on_hover_text("Grammalecte")
+            .clicked()
+            && !matches!(active_analyzer, Analyzer::Grammalecte)
+        {
+            action = Action::SwitchAnalyzer(Analyzer::Grammalecte);
+        }
+    });
+
+    let can_analyse = match active_analyzer {
+        Analyzer::LanguageTool => matches!(lt_status, LtStatus::Connected),
+        Analyzer::Grammalecte => matches!(gc_status, GcStatus::Connected),
+    } && !running;
+
+    ui.horizontal(|ui| {
         if ui
             .add_enabled(can_analyse, egui::Button::new("▶"))
             .on_hover_text("Analyser")
