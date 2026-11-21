@@ -123,7 +123,7 @@ pub fn show(
         }
 
         if ui
-            .add_enabled(gc_conn, egui::Button::new("⚙"))
+            .add_enabled(gc_conn, egui::Button::new("󰒓"))
             .on_hover_text("Options Grammalecte")
             .clicked()
         {
