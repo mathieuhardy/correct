@@ -255,6 +255,17 @@ src/
 - [x] Valeurs par défaut sensées (voir analyse des options ci-dessous)
 - [x] Optionnel : panneau d'options dans l'UI
 
+### Phase 11 — Mode édition
+
+- [x] `edit_mode: bool` dans `App` (défaut : false) ; toggle via bouton ✎ dans l'en-tête du panneau central
+- [x] `editor::show` : `.interactive(edit_mode)` pour basculer lecture seule / écriture
+- [x] Dès qu'une modification est détectée (`buf.modified = true`) : vider `lt_results` immédiatement (offsets périmés)
+- [x] Pas de déclenchement automatique de l'analyse pendant la frappe ; l'analyse est lancée uniquement sur Ctrl+S
+- [x] Ctrl+S : `fs::write` + `buf.modified = false` + `start_analysis()` directement ; le watcher détectera l'écriture mais la garde `content == buf.content` dans `reload_open_file()` l'absorbera sans double déclenchement
+- [x] Indicateur de modification non sauvegardée (`●`) dans le header central quand `modified == true`
+- [x] Mode édition : désactiver le clic-popup sur les erreurs (overlay incompatible avec `TextEdit` interactif) ; interactions via le panneau droit uniquement
+- [x] Fermeture / switch de fichier ou de projet avec `modified == true` : popup de confirmation "Sauvegarder / Ignorer les modifications / Annuler" (`unsaved_dialog: Option<PendingAction>` dans App)
+
 ---
 
 ### Bugs trouvés

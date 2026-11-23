@@ -769,6 +769,7 @@ dependencies = [
  "eframe",
  "egui",
  "fontdb",
+ "libc",
  "notify",
  "reqwest",
  "rfd",

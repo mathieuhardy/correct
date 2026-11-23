@@ -9,8 +9,9 @@ pub fn show(
     selected: Option<usize>,
     scroll_to: bool,
     max_width: Option<f32>,
-) -> Option<usize> {
-    let buf = file?;
+    edit_mode: bool,
+) -> (Option<usize>, bool) {
+    let Some(buf) = file else { return (None, false); };
 
     let available = ui.available_width();
     let content_w = max_width.map(|mw| mw.min(available)).unwrap_or(available);
@@ -21,6 +22,7 @@ pub fn show(
     let custom_lh = (line_height - 1.0).abs() > 0.01;
 
     let mut clicked = None;
+    let mut text_changed = false;
 
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
@@ -51,7 +53,7 @@ pub fn show(
                         .font(egui::TextStyle::Monospace)
                         .desired_width(content_w)
                         .frame(egui::Frame::new())
-                        .interactive(false)
+                        .interactive(edit_mode)
                         .layouter(&mut layouter)
                         .show(ui)
                 } else {
@@ -59,7 +61,7 @@ pub fn show(
                         .font(egui::TextStyle::Monospace)
                         .desired_width(content_w)
                         .frame(egui::Frame::new())
-                        .interactive(false)
+                        .interactive(edit_mode)
                         .show(ui)
                 };
                 paint_underlines(ui.painter(), &res.galley, res.galley_pos, matches, selected);
@@ -77,23 +79,27 @@ pub fn show(
                     }
                 }
 
-                // TextEdit non interactif ne capte que le survol : zone cliquable superposée.
-                let click = ui.interact(
-                    res.response.rect,
-                    res.response.id.with("click"),
-                    egui::Sense::click(),
-                );
-                if let Some(pos) = click.hover_pos() {
-                    let hit = match_at(&res.galley, res.galley_pos, matches, pos);
-                    if hit.is_some() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                    }
-                    if click.clicked() {
-                        clicked = hit;
-                    }
-                }
                 if res.response.changed() {
                     buf.modified = true;
+                    text_changed = true;
+                }
+
+                if !edit_mode {
+                    // TextEdit non interactif ne capte que le survol : zone cliquable superposée.
+                    let click = ui.interact(
+                        res.response.rect,
+                        res.response.id.with("click"),
+                        egui::Sense::click(),
+                    );
+                    if let Some(pos) = click.hover_pos() {
+                        let hit = match_at(&res.galley, res.galley_pos, matches, pos);
+                        if hit.is_some() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+                        if click.clicked() {
+                            clicked = hit;
+                        }
+                    }
                 }
             };
 
@@ -107,7 +113,7 @@ pub fn show(
             }
         });
 
-    clicked
+    (clicked, text_changed)
 }
 
 /// Rectangles (un par ligne visuelle) couverts par une erreur, relatifs au galley,

@@ -42,7 +42,15 @@ pub struct App {
     pub accent_fg: Option<egui::Color32>,
     pub selection_bg: Option<egui::Color32>,
     pub selection_fg: Option<egui::Color32>,
+    pub edit_mode: bool,
+    unsaved_dialog: Option<PendingAction>,
     pub app_error: Option<String>,
+}
+
+/// Action à exécuter après confirmation dans le dialogue "modifications non sauvegardées".
+enum PendingAction {
+    OpenFile(PathBuf),
+    OpenProject(PathBuf),
 }
 
 /// Analyse lancée sur un thread. Le résultat n'est appliqué que si le fichier ouvert
@@ -167,6 +175,8 @@ impl App {
             accent_fg,
             selection_bg,
             selection_fg,
+            edit_mode: false,
+            unsaved_dialog: None,
             app_error: None,
         };
         if let Some(path) = last_project {
@@ -331,6 +341,14 @@ impl App {
     }
 
     pub fn open_project(&mut self, path: PathBuf) {
+        if self.open_file.as_ref().is_some_and(|b| b.modified) {
+            self.unsaved_dialog = Some(PendingAction::OpenProject(path));
+            return;
+        }
+        self.do_open_project(path);
+    }
+
+    fn do_open_project(&mut self, path: PathBuf) {
         self.open_file = None;
         self.file_watcher = None;
         self.analysis = None;
@@ -347,6 +365,14 @@ impl App {
     }
 
     pub fn load_file(&mut self, path: PathBuf) {
+        if self.open_file.as_ref().is_some_and(|b| b.modified) {
+            self.unsaved_dialog = Some(PendingAction::OpenFile(path));
+            return;
+        }
+        self.do_load_file(path);
+    }
+
+    fn do_load_file(&mut self, path: PathBuf) {
         match std::fs::read_to_string(&path) {
             Ok(content) => {
                 self.lt_results.clear();
@@ -491,6 +517,71 @@ impl App {
     fn close_popup(&mut self) {
         self.selected_match = None;
         self.popup_open = false;
+    }
+
+    fn save_file(&mut self) {
+        let Some(buf) = self.open_file.as_mut() else { return; };
+        if !buf.modified { return; }
+        match std::fs::write(&buf.path, &buf.content) {
+            Ok(()) => buf.modified = false,
+            Err(e) => {
+                self.app_error =
+                    Some(format!("Impossible d'écrire '{}' : {e}", buf.path.display()));
+                return;
+            }
+        }
+        self.start_analysis();
+    }
+
+    fn dispatch_pending(&mut self, action: PendingAction) {
+        match action {
+            PendingAction::OpenFile(path) => self.do_load_file(path),
+            PendingAction::OpenProject(path) => self.do_open_project(path),
+        }
+    }
+
+    fn show_unsaved_dialog(&mut self, ctx: &egui::Context) {
+        if self.unsaved_dialog.is_none() {
+            return;
+        }
+        let mut do_save = false;
+        let mut do_discard = false;
+        let mut do_cancel = false;
+        egui::Modal::new(egui::Id::unique("unsaved_dialog")).show(ctx, |ui| {
+            ui.set_width(300.0);
+            ui.label("Modifications non sauvegardées.");
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                do_save = ui.button("Sauvegarder").clicked();
+                do_discard = ui.button("Ignorer les modifications").clicked();
+                do_cancel = ui.button("Annuler").clicked();
+            });
+        });
+        if do_save {
+            if let Some(buf) = self.open_file.as_mut() {
+                if let Err(e) = std::fs::write(&buf.path, &buf.content) {
+                    self.app_error =
+                        Some(format!("Impossible d'écrire '{}' : {e}", buf.path.display()));
+                    self.unsaved_dialog = None;
+                    return;
+                }
+                buf.modified = false;
+            }
+            if let Some(action) = self.unsaved_dialog.take() {
+                self.dispatch_pending(action);
+            }
+        } else if do_discard {
+            if let Some(buf) = self.open_file.as_mut() {
+                buf.modified = false;
+            }
+            if let Some(action) = self.unsaved_dialog.take() {
+                self.dispatch_pending(action);
+            }
+        } else if do_cancel {
+            self.unsaved_dialog = None;
+        }
     }
 
     fn show_gc_options(&mut self, ctx: &egui::Context) {
@@ -828,6 +919,11 @@ fn open_folder_dialog() -> Option<PathBuf> {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Ctrl+S
+        if ui.input(|i| i.key_pressed(egui::Key::S) && i.modifiers.ctrl) {
+            self.save_file();
+        }
+
         // Ctrl+O
         if ui.input(|i| i.key_pressed(egui::Key::O) && i.modifiers.ctrl)
             && let Some(path) = open_folder_dialog()
@@ -943,8 +1039,25 @@ impl eframe::App for App {
             });
 
         // Panneau central — éditeur
-        egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(i) = super::editor::show(
+        egui::CentralPanel::default()
+            .frame(egui::Frame::side_top_panel(ui.style()))
+            .show(ui, |ui| {
+            let file_title = match self.open_file.as_ref() {
+                Some(buf) => {
+                    let name = buf.path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("…");
+                    if buf.modified { format!("{name} ●") } else { name.to_string() }
+                }
+                None => String::new(),
+            };
+            let edit_icon = if self.edit_mode { "󰍁" } else { "󰌾" };
+            let edit_btn = self.open_file.is_some().then_some(edit_icon);
+            if panel_header(ui, "󰈙", &file_title, abg, afg, edit_btn) {
+                self.edit_mode = !self.edit_mode;
+            }
+
+            let (clicked, text_changed) = super::editor::show(
                 ui,
                 self.open_file.as_mut(),
                 &self.lt_results,
@@ -952,7 +1065,13 @@ impl eframe::App for App {
                 self.selected_match,
                 self.scroll_to_selected,
                 self.config.app.editor_max_width,
-            ) {
+                self.edit_mode,
+            );
+            if text_changed {
+                self.lt_results.clear();
+                self.close_popup();
+            }
+            if let Some(i) = clicked {
                 self.popup_opened_at = ui.input(|inp| inp.time);
                 self.open_popup(i);
             }
@@ -962,5 +1081,6 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.show_popup(&ctx);
         self.show_gc_options(&ctx);
+        self.show_unsaved_dialog(&ctx);
     }
 }

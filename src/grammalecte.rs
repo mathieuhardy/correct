@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt as _;
 
 use crate::config::GrammalecteConfig;
 use crate::languagetool::{normalize_spaces, LtMatch};
@@ -62,6 +64,25 @@ struct GcSpellingError {
     // Pas de aSuggestions dans la réponse réelle de l'API Grammalecte.
 }
 
+fn pid_file() -> std::path::PathBuf {
+    std::path::PathBuf::from("/tmp/correct-gc.pid")
+}
+
+/// Tue le serveur GC tracké (PID file) s'il tourne encore. Noop si le fichier est absent.
+/// Tue le process group du serveur précédent tracké par le fichier PID.
+fn kill_tracked_server() {
+    let path = pid_file();
+    if let Ok(s) = std::fs::read_to_string(&path) {
+        if let Ok(pgid) = s.trim().parse::<i32>() {
+            #[cfg(unix)]
+            unsafe {
+                libc::killpg(pgid, libc::SIGKILL);
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
 impl GcClient {
     fn ping(http: &reqwest::blocking::Client, url: &str) -> bool {
         http.get(format!("{url}/get_options/fr"))
@@ -101,15 +122,29 @@ impl GcClient {
         };
         let args: Vec<&str> = parts.collect();
 
-        match std::process::Command::new(cmd).args(&args).spawn() {
+        // Tuer le serveur orphelin du lancement précédent avant d'en spawner un nouveau.
+        kill_tracked_server();
+
+        #[cfg(unix)]
+        let spawn_result = std::process::Command::new(cmd)
+            .args(&args)
+            .process_group(0) // Nouveau process group → PGID = PID du serveur.
+            .spawn();
+        #[cfg(not(unix))]
+        let spawn_result = std::process::Command::new(cmd).args(&args).spawn();
+
+        match spawn_result {
             Ok(child) => {
+                let pid = child.id();
                 let client = client(Some(child));
                 for _ in 0..10 {
                     std::thread::sleep(Duration::from_millis(500));
                     if Self::ping(&client.http, &client.url) {
+                        let _ = std::fs::write(pid_file(), pid.to_string());
                         return (client, GcStatus::Connected, None);
                     }
                 }
+                let _ = std::fs::remove_file(pid_file());
                 let msg = format!(
                     "{unreachable} : '{binary}' lancé mais ne répond pas après 5 s"
                 );
@@ -275,8 +310,17 @@ pub fn default_gc_options() -> HashMap<String, bool> {
 impl Drop for GcClient {
     fn drop(&mut self) {
         if let Some(ref mut child) = self.child {
+            let pgid = child.id() as i32;
+            // Tuer le process group entier (serveur + tous ses workers).
+            #[cfg(unix)]
+            unsafe {
+                libc::killpg(pgid, libc::SIGKILL);
+            }
+            #[cfg(not(unix))]
             let _ = child.kill();
+            let _ = child.wait();
         }
+        let _ = std::fs::remove_file(pid_file());
     }
 }
 
