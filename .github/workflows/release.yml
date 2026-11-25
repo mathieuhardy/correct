@@ -1,0 +1,43 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev libxkbcommon-dev libwayland-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Package
+        run: |
+          NAME="correct-x86_64-linux"
+          mkdir -p "dist/$NAME"
+          cp target/release/correct data/icon.png "dist/$NAME/"
+          tar -C dist -czf "$NAME.tar.gz" "$NAME"
+          # Hash SRI directement utilisable dans fetchurl { hash = "..."; }
+          echo "sha256-$(openssl dgst -sha256 -binary "$NAME.tar.gz" | base64)" > "$NAME.tar.gz.sri"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            correct-x86_64-linux.tar.gz correct-x86_64-linux.tar.gz.sri \
+            --title "$GITHUB_REF_NAME" --notes "Build de ${GITHUB_SHA}"
